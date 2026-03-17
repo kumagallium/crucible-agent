@@ -24,7 +24,6 @@ services:
         condition: service_started
     volumes:
       - ./mcp_agent.config.yaml:/app/mcp_agent.config.yaml:ro
-      - ./mcp_agent.secrets.yaml:/app/mcp_agent.secrets.yaml:ro
     restart: unless-stopped
 
   litellm:
