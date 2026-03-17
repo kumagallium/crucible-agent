@@ -12,7 +12,7 @@ services:
   agent:
     build: .
     ports:
-      - "127.0.0.1:${AGENT_PORT:-8090}:8090"
+      - "${AGENT_PORT:-8090}:8090"
     env_file: .env
     environment:
       - DATABASE_URL=postgresql+asyncpg://agent:agent@postgres:5432/crucible_agent
@@ -30,7 +30,7 @@ services:
   litellm:
     image: ghcr.io/berriai/litellm:main-stable
     ports:
-      - "127.0.0.1:4000:4000"
+      - "4000:4000"
     volumes:
       - ./litellm_config.yaml:/app/config.yaml:ro
     command: ["--config", "/app/config.yaml", "--port", "4000"]
