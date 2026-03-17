@@ -1,0 +1,32 @@
+# mcp-agent Configuration
+# Docs: https://docs.mcp-agent.com
+#
+# サーバーはCrucible auto-discoveryで動的に追加されるが、
+# Crucibleなしで使う場合はここに直書きする
+
+mcp:
+  servers:
+    # 例: Crucibleなしで直接SSE接続する場合
+    # prov-dm:
+    #   url: http://localhost:9001/sse
+    #   transport: sse
+    # calculator:
+    #   url: http://localhost:9002/sse
+    #   transport: sse
+
+    # 例: stdio接続のローカルサーバー
+    # filesystem:
+    #   command: npx
+    #   args: ["-y", "@modelcontextprotocol/server-filesystem", "/data"]
+
+execution_engine: asyncio  # or "temporal" for durable workflows
+
+# OpenTelemetry（オプション）
+# otel:
+#   enabled: true
+#   exporters:
+#     - console
+
+logger:
+  transports: [console]
+  level: info

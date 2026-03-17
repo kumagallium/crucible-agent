@@ -1,0 +1,56 @@
+# Crucible Agent - docker-compose.yml
+# Compose B: Agent runtime (mcp-agent + LiteLLM + PostgreSQL)
+#
+# Usage:
+#   docker compose up -d           # 起動
+#   docker compose logs -f agent   # ログ確認
+#   http://localhost:8090           # Chat UI (Mode A)
+#   http://localhost:8090/docs      # API docs (Swagger)
+#   http://localhost:4000           # LiteLLM Proxy UI
+
+services:
+  agent:
+    build: .
+    ports:
+      - "${AGENT_PORT:-8090}:8090"
+    env_file: .env
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://agent:agent@postgres:5432/crucible_agent
+      - LITELLM_API_BASE=http://litellm:4000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      litellm:
+        condition: service_started
+    volumes:
+      - ./mcp_agent.config.yaml:/app/mcp_agent.config.yaml:ro
+      - ./mcp_agent.secrets.yaml:/app/mcp_agent.secrets.yaml:ro
+    restart: unless-stopped
+
+  litellm:
+    image: ghcr.io/berriai/litellm:main-stable
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./litellm_config.yaml:/app/config.yaml:ro
+    command: ["--config", "/app/config.yaml", "--port", "4000"]
+    env_file: .env
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: agent
+      POSTGRES_PASSWORD: agent
+      POSTGRES_DB: crucible_agent
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agent"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  pgdata:

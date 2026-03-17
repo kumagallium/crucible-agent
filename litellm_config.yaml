@@ -1,0 +1,24 @@
+# LiteLLM Proxy Configuration
+# Docs: https://docs.litellm.ai/docs/proxy/configs
+
+model_list:
+  # さくらのAI Engine
+  - model_name: sakura
+    litellm_params:
+      model: openai/${LLM_MODEL}
+      api_base: ${SAKURA_AI_API_BASE}
+      api_key: ${SAKURA_AI_API_KEY}
+
+  # Ollama（ローカル開発用、オプション）
+  # - model_name: ollama-local
+  #   litellm_params:
+  #     model: ollama/llama3.2
+  #     api_base: http://host.docker.internal:11434
+
+general_settings:
+  master_key: sk-crucible-agent-dev
+  # store_model_in_db: false  # 開発時はDBなしでOK
+
+litellm_settings:
+  drop_params: true  # 未対応パラメータを自動除外
+  # set_verbose: true  # デバッグ時に有効化
