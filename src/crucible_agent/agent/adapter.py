@@ -1,33 +1,26 @@
-"""mcp-agent との結合層 — 外部依存はここに集約する
+"""MCP SDK + httpx による直接実装 — mcp-agent を使わない adapter
 
-mcp-agent が破壊的変更を入れた場合、このファイルだけ差し替えれば済む設計。
+mcp-agent の OpenAI SDK バリデーション問題を回避するため、
+MCP Python SDK と httpx で tool_use ループを自前実装する。
 """
 
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import time
+import uuid
 from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-# 承認コールバック型: tool_call_id, tool_name, input → approved (True/False)
-ApprovalCallback = Callable[[str, str, dict], asyncio.Future[bool]]
-
-from mcp_agent.app import MCPApp
-from mcp_agent.agents.agent import Agent
-from mcp_agent.config import (
-    MCPServerSettings,
-    MCPSettings,
-    OpenAISettings,
-    Settings as MCPAgentSettings,
-)
-from mcp_agent.workflows.llm.augmented_llm_openai import OpenAIAugmentedLLM
+import httpx
+from mcp import ClientSession
+from mcp.client.sse import sse_client
 
 from crucible_agent.config import settings
 
-# 循環 import 回避のため TYPE_CHECKING で import
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -35,10 +28,13 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# 承認コールバック型
+ApprovalCallback = Callable[[str, str, dict], asyncio.Future[bool]]
+
 
 @dataclass
 class StreamEvent:
-    """ストリーミングイベント（WebSocket 経由でクライアントに送信する）"""
+    """ストリーミングイベント"""
 
     type: str  # text_delta, tool_start, tool_end, approval_request, done, error
     content: str = ""
@@ -60,41 +56,113 @@ class AdapterResult:
     token_usage: dict
 
 
-def _discovered_to_server_configs(
-    discovered: list[DiscoveredServer],
-) -> dict[str, MCPServerSettings]:
-    """DiscoveredServer リストを mcp-agent の MCPServerSettings に変換"""
-    configs: dict[str, MCPServerSettings] = {}
-    for s in discovered:
-        configs[s.name] = MCPServerSettings(
-            url=s.url,
-            transport=s.transport if s.transport != "streamable-http" else "sse",
+# --- MCP サーバー接続 ---
+
+
+async def _connect_mcp_server(
+    name: str, url: str
+) -> tuple[ClientSession, Any, Any]:
+    """MCP サーバーに SSE 接続してセッションを返す"""
+    read_stream, write_stream = await sse_client(url).__aenter__()
+    session = ClientSession(read_stream, write_stream)
+    await session.__aenter__()
+    await session.initialize()
+    logger.info("MCP connected: %s (%s)", name, url)
+    return session, read_stream, write_stream
+
+
+async def _get_tools_from_servers(
+    servers: list[DiscoveredServer],
+) -> tuple[dict[str, ClientSession], list[dict]]:
+    """全 MCP サーバーに接続し、ツール定義を収集する
+
+    Returns:
+        (sessions: {tool_name: session}, tools: OpenAI function 形式のリスト)
+    """
+    sessions: dict[str, ClientSession] = {}
+    tools: list[dict] = []
+    tool_to_server: dict[str, str] = {}
+
+    for s in servers:
+        try:
+            session, _, _ = await _connect_mcp_server(s.name, s.url)
+            result = await session.list_tools()
+            for tool in result.tools:
+                tool_def = {
+                    "type": "function",
+                    "function": {
+                        "name": tool.name,
+                        "description": tool.description or "",
+                        "parameters": tool.inputSchema if tool.inputSchema else {"type": "object", "properties": {}},
+                    },
+                }
+                tools.append(tool_def)
+                sessions[tool.name] = session
+                tool_to_server[tool.name] = s.name
+            logger.info("  %s: %d tools loaded", s.name, len(result.tools))
+        except Exception as e:
+            logger.warning("MCP server '%s' connection failed: %s", s.name, e)
+
+    return sessions, tools
+
+
+async def _call_tool(
+    sessions: dict[str, ClientSession],
+    tool_name: str,
+    arguments: dict,
+) -> str:
+    """MCP サーバー上のツールを呼び出す"""
+    session = sessions.get(tool_name)
+    if not session:
+        return json.dumps({"error": f"Tool '{tool_name}' not found in connected servers"})
+
+    try:
+        result = await session.call_tool(tool_name, arguments)
+        # MCP の content は配列形式 → 文字列に変換
+        parts = []
+        for block in result.content:
+            if hasattr(block, "text"):
+                parts.append(block.text)
+            else:
+                parts.append(str(block))
+        return "\n".join(parts)
+    except Exception as e:
+        logger.error("Tool call failed: %s - %s", tool_name, e)
+        return json.dumps({"error": str(e)})
+
+
+# --- LLM 呼び出し ---
+
+
+async def _call_llm(
+    messages: list[dict],
+    tools: list[dict] | None = None,
+) -> dict:
+    """LiteLLM Proxy に chat completions リクエストを送る"""
+    payload: dict[str, Any] = {
+        "model": settings.llm_model,
+        "messages": messages,
+    }
+    if tools:
+        payload["tools"] = tools
+        payload["tool_choice"] = "auto"
+
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {settings.litellm_api_key}",
+    }
+
+    async with httpx.AsyncClient(timeout=120.0) as client:
+        resp = await client.post(
+            f"{settings.litellm_api_base}/v1/chat/completions",
+            json=payload,
+            headers=headers,
         )
-        logger.debug("MCP server config: %s → %s (%s)", s.name, s.url, s.transport)
-    return configs
+        resp.raise_for_status()
+        return resp.json()
 
 
-def _build_mcp_app(discovered: list[DiscoveredServer] | None = None) -> MCPApp:
-    """discovery 結果から MCPApp を構築する"""
-    server_configs = _discovered_to_server_configs(discovered or [])
-    mcp = MCPSettings(servers=server_configs)
-    openai = OpenAISettings(
-        default_model=settings.llm_model,
-        base_url=f"{settings.litellm_api_base}/v1",
-        api_key=settings.litellm_api_key,
-    )
-    mcp_settings = MCPAgentSettings(
-        execution_engine="asyncio",
-        mcp=mcp,
-        openai=openai,
-    )
-    app = MCPApp(name="crucible_agent", settings=mcp_settings)
-    logger.info(
-        "MCPApp created (model=%s, servers=%s)",
-        settings.llm_model,
-        list(server_configs.keys()),
-    )
-    return app
+# --- tool_use ループ ---
 
 
 async def run(
@@ -102,40 +170,88 @@ async def run(
     message: str,
     server_names: list[str] | None = None,
     discovered_servers: list[DiscoveredServer] | None = None,
+    max_turns: int = 10,
 ) -> AdapterResult:
-    """mcp-agent を使ってエージェントを1回実行する（同期版）"""
-    mcp_app = _build_mcp_app(discovered_servers)
+    """エージェントを実行する（同期版）"""
+    servers = discovered_servers or []
 
-    tool_calls: list[dict] = []
-    full_text = ""
+    # MCP サーバーに接続してツール定義を取得
+    sessions, tools = await _get_tools_from_servers(servers)
 
-    async with mcp_app.run():
-        agent = Agent(
-            name="crucible_assistant",
-            instruction=instruction,
-            server_names=server_names or [],
+    messages = [
+        {"role": "system", "content": instruction},
+        {"role": "user", "content": message},
+    ]
+
+    tool_calls_log: list[dict] = []
+    total_usage = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
+
+    try:
+        for turn in range(max_turns):
+            resp = await _call_llm(messages, tools if tools else None)
+
+            # トークン使用量を加算
+            usage = resp.get("usage", {})
+            total_usage["input_tokens"] += usage.get("prompt_tokens", 0)
+            total_usage["output_tokens"] += usage.get("completion_tokens", 0)
+            total_usage["total_tokens"] += usage.get("total_tokens", 0)
+
+            choice = resp["choices"][0]
+            msg = choice["message"]
+
+            # tool_calls があれば実行
+            if msg.get("tool_calls"):
+                # アシスタントメッセージを履歴に追加
+                messages.append(msg)
+
+                for tc in msg["tool_calls"]:
+                    func = tc["function"]
+                    tool_name = func["name"]
+                    arguments = json.loads(func["arguments"]) if isinstance(func["arguments"], str) else func["arguments"]
+
+                    logger.info("Tool call: %s(%s)", tool_name, json.dumps(arguments, ensure_ascii=False)[:200])
+
+                    start = time.monotonic()
+                    result_str = await _call_tool(sessions, tool_name, arguments)
+                    duration_ms = int((time.monotonic() - start) * 1000)
+
+                    # ツール結果を文字列としてメッセージに追加
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tc["id"],
+                        "content": result_str,
+                    })
+
+                    tool_calls_log.append({
+                        "tool_name": tool_name,
+                        "input": arguments,
+                        "output": result_str[:1000],
+                        "duration_ms": duration_ms,
+                    })
+
+                # 次のターンへ（LLM にツール結果をフィードバック）
+                continue
+
+            # テキスト応答のみ → 完了
+            return AdapterResult(
+                message=msg.get("content", ""),
+                tool_calls=tool_calls_log,
+                token_usage=total_usage,
+            )
+
+        # max_turns に到達
+        return AdapterResult(
+            message="(最大ループ回数に到達しました)",
+            tool_calls=tool_calls_log,
+            token_usage=total_usage,
         )
-
-        async with agent:
-            llm = await agent.attach_llm(OpenAIAugmentedLLM)
-
+    finally:
+        # MCP セッションをクリーンアップ
+        for session in set(sessions.values()):
             try:
-                async for event in llm.generate_stream(message):
-                    event_type = _get_event_type(event)
-                    if event_type == "text_delta":
-                        full_text += _get_event_content(event)
-                    elif event_type == "tool_result":
-                        tool_calls.append(_extract_tool_call(event))
-            except (AttributeError, TypeError):
-                # generate_stream が利用できない場合はフォールバック
-                logger.info("generate_stream unavailable, falling back to generate_str")
-                full_text = await llm.generate_str(message)
-
-    return AdapterResult(
-        message=full_text,
-        tool_calls=tool_calls,
-        token_usage={},
-    )
+                await session.__aexit__(None, None, None)
+            except Exception:
+                pass
 
 
 async def run_stream(
@@ -145,154 +261,107 @@ async def run_stream(
     discovered_servers: list[DiscoveredServer] | None = None,
     require_approval: bool = False,
     approval_callback: ApprovalCallback | None = None,
+    max_turns: int = 10,
 ) -> AsyncIterator[StreamEvent]:
-    """mcp-agent を使ってエージェントを実行し、イベントをストリームする
+    """エージェントを実行し、イベントをストリームする"""
+    servers = discovered_servers or []
 
-    Args:
-        discovered_servers: discovery で検出されたサーバー情報（URL 含む）
-        require_approval: True の場合、ツール実行前に承認を求める
-        approval_callback: 承認リクエスト時に呼ばれるコールバック。
-    """
-    mcp_app = _build_mcp_app(discovered_servers)
+    sessions, tools = await _get_tools_from_servers(servers)
 
-    async with mcp_app.run():
-        agent = Agent(
-            name="crucible_assistant",
-            instruction=instruction,
-            server_names=server_names or [],
-        )
+    messages = [
+        {"role": "system", "content": instruction},
+        {"role": "user", "content": message},
+    ]
 
-        async with agent:
-            llm = await agent.attach_llm(OpenAIAugmentedLLM)
+    total_usage = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
 
-            tool_start_times: dict[str, float] = {}
+    try:
+        for turn in range(max_turns):
+            resp = await _call_llm(messages, tools if tools else None)
 
-            try:
-                async for event in llm.generate_stream(message):
-                    event_type = _get_event_type(event)
+            usage = resp.get("usage", {})
+            total_usage["input_tokens"] += usage.get("prompt_tokens", 0)
+            total_usage["output_tokens"] += usage.get("completion_tokens", 0)
+            total_usage["total_tokens"] += usage.get("total_tokens", 0)
 
-                    if event_type == "text_delta":
+            choice = resp["choices"][0]
+            msg = choice["message"]
+
+            if msg.get("tool_calls"):
+                messages.append(msg)
+
+                for tc in msg["tool_calls"]:
+                    func = tc["function"]
+                    tool_name = func["name"]
+                    tool_call_id = tc["id"]
+                    arguments = json.loads(func["arguments"]) if isinstance(func["arguments"], str) else func["arguments"]
+
+                    # Plan モード: 承認を求める
+                    if require_approval and approval_callback:
                         yield StreamEvent(
-                            type="text_delta",
-                            content=_get_event_content(event),
-                        )
-
-                    elif event_type == "tool_use_start":
-                        tool_id = _get_tool_id(event)
-                        tool_name = _get_tool_name(event)
-                        tool_input = _get_tool_input(event)
-
-                        # Plan モード: ツール実行前に承認を求める
-                        if require_approval and approval_callback:
-                            yield StreamEvent(
-                                type="approval_request",
-                                tool_call_id=tool_id,
-                                tool_name=tool_name,
-                                input=tool_input,
-                                content=f"ツール '{tool_name}' を実行してよいですか？",
-                            )
-                            approved = await approval_callback(tool_id, tool_name, tool_input)
-                            if not approved:
-                                yield StreamEvent(
-                                    type="tool_end",
-                                    tool_call_id=tool_id,
-                                    tool_name=tool_name,
-                                    output={"rejected": True, "reason": "ユーザーが拒否しました"},
-                                )
-                                continue
-
-                        tool_start_times[tool_id] = time.monotonic()
-                        yield StreamEvent(
-                            type="tool_start",
-                            tool_call_id=tool_id,
+                            type="approval_request",
+                            tool_call_id=tool_call_id,
                             tool_name=tool_name,
-                            input=tool_input,
+                            input=arguments,
+                            content=f"ツール '{tool_name}' を実行してよいですか？",
                         )
+                        approved = await approval_callback(tool_call_id, tool_name, arguments)
+                        if not approved:
+                            messages.append({
+                                "role": "tool",
+                                "tool_call_id": tool_call_id,
+                                "content": "ユーザーがツール実行を拒否しました。",
+                            })
+                            yield StreamEvent(
+                                type="tool_end",
+                                tool_call_id=tool_call_id,
+                                tool_name=tool_name,
+                                output={"rejected": True},
+                            )
+                            continue
 
-                    elif event_type == "tool_result":
-                        tool_id = _get_tool_id(event)
-                        start = tool_start_times.pop(tool_id, time.monotonic())
-                        duration_ms = int((time.monotonic() - start) * 1000)
-                        yield StreamEvent(
-                            type="tool_end",
-                            tool_call_id=tool_id,
-                            tool_name=_get_tool_name(event),
-                            output=_get_tool_output(event),
-                            duration_ms=duration_ms,
-                        )
+                    yield StreamEvent(
+                        type="tool_start",
+                        tool_call_id=tool_call_id,
+                        tool_name=tool_name,
+                        input=arguments,
+                    )
 
-                    elif event_type == "complete":
-                        yield StreamEvent(
-                            type="done",
-                            token_usage=_get_token_usage(event),
-                        )
+                    start = time.monotonic()
+                    result_str = await _call_tool(sessions, tool_name, arguments)
+                    duration_ms = int((time.monotonic() - start) * 1000)
 
-                    elif event_type == "error":
-                        yield StreamEvent(
-                            type="error",
-                            content=_get_event_content(event),
-                        )
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tool_call_id,
+                        "content": result_str,
+                    })
 
-            except (AttributeError, TypeError):
-                logger.info("generate_stream unavailable, falling back to generate_str")
-                result = await llm.generate_str(message)
-                yield StreamEvent(type="text_delta", content=result)
-                yield StreamEvent(type="done")
+                    yield StreamEvent(
+                        type="tool_end",
+                        tool_call_id=tool_call_id,
+                        tool_name=tool_name,
+                        output={"result": result_str[:500]},
+                        duration_ms=duration_ms,
+                    )
 
+                continue
 
-# --- mcp-agent イベントからの値抽出ヘルパー ---
-# mcp-agent の StreamEvent 構造が変わっても、ここだけ修正すれば済む
+            # テキスト応答
+            content = msg.get("content", "")
+            if content:
+                yield StreamEvent(type="text_delta", content=content)
 
+            yield StreamEvent(type="done", token_usage=total_usage)
+            return
 
-def _get_event_type(event: Any) -> str:
-    """イベントタイプを文字列で取得"""
-    t = getattr(event, "type", None)
-    if t is None:
-        return "unknown"
-    # StreamEventType enum → 小文字文字列
-    return str(t.value).lower() if hasattr(t, "value") else str(t).lower()
-
-
-def _get_event_content(event: Any) -> str:
-    return str(getattr(event, "content", "") or "")
-
-
-def _get_tool_id(event: Any) -> str:
-    meta = getattr(event, "metadata", {}) or {}
-    return str(meta.get("tool_call_id", meta.get("id", "")))
-
-
-def _get_tool_name(event: Any) -> str:
-    meta = getattr(event, "metadata", {}) or {}
-    return str(meta.get("tool_name", meta.get("name", "")))
-
-
-def _get_tool_input(event: Any) -> dict:
-    meta = getattr(event, "metadata", {}) or {}
-    return dict(meta.get("input", meta.get("arguments", {})) or {})
-
-
-def _get_tool_output(event: Any) -> dict:
-    content = getattr(event, "content", None)
-    if isinstance(content, dict):
-        return content
-    return {"result": str(content)} if content else {}
-
-
-def _get_token_usage(event: Any) -> dict:
-    usage = getattr(event, "usage", None)
-    if usage and hasattr(usage, "input_tokens"):
-        return {
-            "input_tokens": getattr(usage, "input_tokens", 0),
-            "output_tokens": getattr(usage, "output_tokens", 0),
-            "total_tokens": getattr(usage, "total_tokens", 0),
-        }
-    return {}
-
-
-def _extract_tool_call(event: Any) -> dict:
-    return {
-        "tool_name": _get_tool_name(event),
-        "input": _get_tool_input(event),
-        "output": _get_tool_output(event),
-    }
+        yield StreamEvent(type="done", token_usage=total_usage)
+    except Exception as e:
+        logger.exception("Agent stream error")
+        yield StreamEvent(type="error", content=str(e))
+    finally:
+        for session in set(sessions.values()):
+            try:
+                await session.__aexit__(None, None, None)
+            except Exception:
+                pass

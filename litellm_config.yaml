@@ -9,6 +9,7 @@ model_list:
       api_base: os.environ/SAKURA_AI_API_BASE
       api_key: os.environ/SAKURA_AI_API_KEY
       supports_function_calling: true
+      merge_reasoning_content_in_choices: true
 
   # Ollama（ローカル開発用、オプション）
   # - model_name: ollama-local
