@@ -26,7 +26,7 @@ from crucible_agent.api.schemas import (
 from crucible_agent.config import settings
 from crucible_agent.crucible.discovery import discover_servers
 from crucible_agent.prompts.loader import list_profiles
-from crucible_agent.provenance.recorder import record_agent_run
+from crucible_agent.provenance.recorder import get_session_history, record_agent_run
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -131,6 +131,12 @@ async def agent_run(req: AgentRunRequest) -> AgentRunResponse:
     )
 
 
+@router.get("/provenance/{session_id}")
+async def provenance(session_id: str) -> list[dict]:
+    """セッションの来歴（PROV-DM Activity チェーン）を返す"""
+    return await get_session_history(session_id)
+
+
 @router.websocket("/agent/ws")
 async def agent_ws(websocket: WebSocket, session_id: str | None = None) -> None:
     """WebSocket でストリーミング応答を返す"""
@@ -185,6 +191,10 @@ async def agent_ws(websocket: WebSocket, session_id: str | None = None) -> None:
                 server_names = msg.get("server_names")
                 require_approval = msg.get("require_approval", False)
 
+                # ストリーム中のテキストとツール呼び出しを収集
+                collected_text = ""
+                collected_tools: list[dict] = []
+
                 async for event in run_agent_stream(
                     message=content,
                     session_id=session_id,
@@ -194,6 +204,17 @@ async def agent_ws(websocket: WebSocket, session_id: str | None = None) -> None:
                     require_approval=require_approval,
                     approval_callback=approval_callback if require_approval else None,
                 ):
+                    # 収集
+                    if event.type == "text_delta":
+                        collected_text += event.content
+                    elif event.type == "tool_end" and not event.output.get("rejected"):
+                        collected_tools.append({
+                            "tool_name": event.tool_name,
+                            "input": event.input,
+                            "output": event.output,
+                            "duration_ms": event.duration_ms,
+                        })
+
                     await websocket.send_json({
                         "type": event.type,
                         "content": event.content,
@@ -204,6 +225,17 @@ async def agent_ws(websocket: WebSocket, session_id: str | None = None) -> None:
                         "duration_ms": event.duration_ms,
                         "token_usage": event.token_usage,
                     })
+
+                # PROV-DM 記録
+                try:
+                    await record_agent_run(
+                        session_id=session_id,
+                        user_message=content,
+                        agent_response=collected_text,
+                        tool_calls=collected_tools,
+                    )
+                except Exception:
+                    logger.warning("Provenance recording failed (WS)", exc_info=True)
 
     except Exception as e:
         logger.exception("WebSocket error (session=%s)", session_id)
