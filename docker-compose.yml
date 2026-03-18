@@ -35,7 +35,10 @@ services:
     command: ["--config", "/app/config.yaml", "--port", "4000"]
     env_file: .env
     environment:
-      - DATABASE_URL=
+      - DATABASE_URL=postgresql://agent:agent@postgres:5432/crucible_agent
+    depends_on:
+      postgres:
+        condition: service_healthy
     restart: unless-stopped
 
   postgres:
