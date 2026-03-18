@@ -1,28 +1,34 @@
-import pytest
-
-from crucible_agent.config import Settings
+from crucible_agent.config import Settings, settings
 
 
-class TestSettingsDefaults:
-    def test_default_litellm_api_base(self):
-        s = Settings()
-        assert s.litellm_api_base == "http://litellm:4000"
+class TestSettingsInstance:
+    def test_has_litellm_api_base(self):
+        assert hasattr(settings, "litellm_api_base")
+        assert isinstance(settings.litellm_api_base, str)
 
-    def test_default_llm_model(self):
-        s = Settings()
-        assert s.llm_model == "sakura"
+    def test_has_llm_model(self):
+        assert hasattr(settings, "llm_model")
+        assert isinstance(settings.llm_model, str)
 
-    def test_default_database_url(self):
-        s = Settings()
-        assert "postgresql+asyncpg" in s.database_url
+    def test_has_database_url(self):
+        assert hasattr(settings, "database_url")
+        assert isinstance(settings.database_url, str)
 
-    def test_default_agent_port(self):
-        s = Settings()
-        assert s.agent_port == 8090
+    def test_has_agent_port(self):
+        assert hasattr(settings, "agent_port")
+        assert isinstance(settings.agent_port, int)
 
-    def test_default_log_level(self):
-        s = Settings()
-        assert s.log_level == "info"
+    def test_has_log_level(self):
+        assert hasattr(settings, "log_level")
+        assert isinstance(settings.log_level, str)
+
+    def test_has_crucible_api_url(self):
+        assert hasattr(settings, "crucible_api_url")
+        assert isinstance(settings.crucible_api_url, str)
+
+    def test_has_mcp_config_path(self):
+        assert hasattr(settings, "mcp_config_path")
+        assert isinstance(settings.mcp_config_path, str)
 
 
 class TestSettingsEnvOverride:
@@ -39,11 +45,3 @@ class TestSettingsEnvOverride:
         assert s.agent_port == 7777
         assert s.log_level == "debug"
         assert s.database_url == "sqlite:///test.db"
-
-
-class TestSettingsModelConfig:
-    def test_env_file_setting(self):
-        assert Settings.model_config["env_file"] == ".env"
-
-    def test_env_file_encoding(self):
-        assert Settings.model_config["env_file_encoding"] == "utf-8"

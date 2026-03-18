@@ -99,10 +99,9 @@ class TestDiscoveredToServerConfigs:
 
 
 class TestGetEventType:
-    def test_with_dict_like_object_having_type_attr(self):
-        event = MagicMock()
+    def test_with_string_type_attr(self):
+        event = MagicMock(spec=[])
         event.type = "text_delta"
-        del event.type.value
         assert _get_event_type(event) == "text_delta"
 
     def test_with_enum_type(self):
@@ -222,13 +221,13 @@ class TestRun:
     async def test_success_with_stream(self):
         text_event = MagicMock()
         text_event.type = "text_delta"
-        del text_event.type.value
+
         text_event.content = "Hello"
         text_event.metadata = {}
 
         tool_event = MagicMock()
         tool_event.type = "tool_result"
-        del tool_event.type.value
+
         tool_event.content = {"res": "ok"}
         tool_event.metadata = {"tool_name": "test_tool", "input": {"a": 1}}
 
@@ -287,7 +286,7 @@ class TestRunStream:
     async def test_text_delta_events(self):
         text_event = MagicMock()
         text_event.type = "text_delta"
-        del text_event.type.value
+
         text_event.content = "streaming"
         text_event.metadata = {}
 
@@ -321,13 +320,13 @@ class TestRunStream:
     async def test_tool_use_events(self):
         tool_start_event = MagicMock()
         tool_start_event.type = "tool_use_start"
-        del tool_start_event.type.value
+
         tool_start_event.content = ""
         tool_start_event.metadata = {"tool_call_id": "tc1", "tool_name": "search", "input": {"q": "hi"}}
 
         tool_result_event = MagicMock()
         tool_result_event.type = "tool_result"
-        del tool_result_event.type.value
+
         tool_result_event.content = {"answer": "found"}
         tool_result_event.metadata = {"tool_call_id": "tc1", "tool_name": "search"}
 
@@ -364,7 +363,7 @@ class TestRunStream:
     async def test_done_event(self):
         complete_event = MagicMock()
         complete_event.type = "complete"
-        del complete_event.type.value
+
         complete_event.content = ""
         complete_event.metadata = {}
         del complete_event.usage

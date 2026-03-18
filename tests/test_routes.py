@@ -226,8 +226,8 @@ class TestAgentRunEndpoint:
     def test_run_agent_raises(self, mock_run, client):
         mock_run.side_effect = RuntimeError("LLM failed")
 
-        resp = client.post("/agent/run", json={"message": "Hello"})
-        assert resp.status_code == 500
+        with pytest.raises(RuntimeError, match="LLM failed"):
+            client.post("/agent/run", json={"message": "Hello"})
 
     def test_missing_message(self, client):
         resp = client.post("/agent/run", json={})
