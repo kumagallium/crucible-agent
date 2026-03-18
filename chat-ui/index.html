@@ -232,6 +232,110 @@
       color: var(--muted-fg);
     }
 
+    /* Plan モードトグル */
+    .plan-toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 2px 0;
+    }
+
+    .plan-toggle-row .label {
+      font-size: 13px;
+      color: var(--foreground);
+    }
+
+    .plan-toggle-row .sublabel {
+      font-size: 11px;
+      color: var(--muted-fg);
+      margin-top: 2px;
+    }
+
+    .plan-toggle {
+      flex-shrink: 0;
+      width: 40px;
+      height: 22px;
+      border-radius: var(--radius-full);
+      border: none;
+      cursor: pointer;
+      position: relative;
+      background: var(--border);
+      transition: background 0.2s;
+      padding: 0;
+    }
+
+    .plan-toggle.on { background: var(--primary); }
+
+    .plan-toggle::after {
+      content: '';
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: white;
+      transition: transform 0.2s;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.15);
+    }
+
+    .plan-toggle.on::after { transform: translateX(18px); }
+
+    /* 承認リクエスト */
+    .msg.approval {
+      align-self: flex-start;
+      background: var(--warn-bg);
+      border: 1px solid var(--warn-border);
+      border-radius: var(--radius-lg);
+      max-width: 70%;
+    }
+
+    .msg.approval .approval-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--warn-fg);
+      margin-bottom: 6px;
+    }
+
+    .msg.approval .approval-detail {
+      font-size: 11px;
+      color: var(--muted-fg);
+      font-family: ui-monospace, 'SF Mono', monospace;
+      margin-bottom: 10px;
+    }
+
+    .msg.approval .approval-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .msg.approval .approval-actions button {
+      padding: 5px 16px;
+      border-radius: var(--radius-lg);
+      font-size: 12px;
+      font-weight: 500;
+      font-family: inherit;
+      cursor: pointer;
+      border: 1px solid;
+      transition: all 0.2s;
+    }
+
+    .btn-approve {
+      background: var(--primary);
+      color: var(--primary-fg);
+      border-color: var(--primary) !important;
+    }
+
+    .btn-approve:hover { background: #3d6844; }
+
+    .btn-reject {
+      background: var(--card);
+      color: var(--error-fg);
+      border-color: var(--error-border) !important;
+    }
+
+    .btn-reject:hover { background: var(--error-bg); }
+
     /* --- メインエリア --- */
     #main {
       flex: 1;
@@ -422,6 +526,18 @@
       <textarea id="custom-instructions" placeholder="追加の指示（任意）..."></textarea>
     </div>
 
+    <!-- Plan モード -->
+    <div class="sidebar-section">
+      <h3>Plan Mode</h3>
+      <div class="plan-toggle-row">
+        <div>
+          <div class="label">ツール実行前に確認</div>
+          <div class="sublabel">ON にするとツール実行前に承認を求めます</div>
+        </div>
+        <button id="plan-toggle" class="plan-toggle" title="OFF"></button>
+      </div>
+    </div>
+
     <!-- ツール一覧 -->
     <div class="sidebar-section">
       <h3>Tools</h3>
@@ -456,9 +572,12 @@
     const toolListEl = document.getElementById('tool-list');
     const headerInfoEl = document.getElementById('header-info');
 
+    const planToggleBtn = document.getElementById('plan-toggle');
+
     let ws = null;
     let currentAgentMsg = null;
     let toolStates = {}; // { name: true/false }
+    let planMode = false;
 
     // --- データ取得 ---
 
@@ -583,6 +702,9 @@
           currentAgentMsg.textContent += data.content;
           scrollToBottom();
           break;
+        case 'approval_request':
+          addApprovalMsg(data.tool_call_id, data.tool_name, data.input, data.content);
+          break;
         case 'tool_start':
           addToolMsg(`🔧 ${data.tool_name}`, JSON.stringify(data.input, null, 2));
           break;
@@ -618,6 +740,7 @@
       if (enabled.length < Object.keys(toolStates).length) {
         payload.server_names = enabled;
       }
+      if (planMode) payload.require_approval = true;
       ws.send(JSON.stringify(payload));
 
       inputEl.value = '';
@@ -644,6 +767,35 @@
       el.innerHTML = `<div class="tool-label">${escapeHtml(label)}</div><code>${escapeHtml(detail)}</code>`;
       messagesEl.appendChild(el);
       scrollToBottom();
+    }
+
+    function addApprovalMsg(toolCallId, toolName, toolInput, message) {
+      const el = document.createElement('div');
+      el.className = 'msg approval';
+      el.innerHTML = `
+        <div class="approval-label">⚠️ ${escapeHtml(message || 'ツールを実行してよいですか？')}</div>
+        <div class="approval-detail">${escapeHtml(toolName)}: ${escapeHtml(JSON.stringify(toolInput, null, 2))}</div>
+        <div class="approval-actions">
+          <button class="btn-approve" data-id="${escapeHtml(toolCallId)}">実行する</button>
+          <button class="btn-reject" data-id="${escapeHtml(toolCallId)}">拒否</button>
+        </div>`;
+      messagesEl.appendChild(el);
+      scrollToBottom();
+
+      el.querySelector('.btn-approve').addEventListener('click', () => {
+        sendApproval(toolCallId, true);
+        el.querySelector('.approval-actions').innerHTML = '<span style="color:var(--running-fg);font-size:12px;">✅ 承認しました</span>';
+      });
+      el.querySelector('.btn-reject').addEventListener('click', () => {
+        sendApproval(toolCallId, false);
+        el.querySelector('.approval-actions').innerHTML = '<span style="color:var(--error-fg);font-size:12px;">❌ 拒否しました</span>';
+      });
+    }
+
+    function sendApproval(toolCallId, approved) {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'approval', tool_call_id: toolCallId, approved }));
+      }
     }
 
     function addSystemMsg(text) {
@@ -679,6 +831,12 @@
     });
 
     sendBtn.addEventListener('click', send);
+
+    planToggleBtn.addEventListener('click', () => {
+      planMode = !planMode;
+      planToggleBtn.classList.toggle('on', planMode);
+      planToggleBtn.title = planMode ? 'ON' : 'OFF';
+    });
 
     // --- 初期化 ---
     loadHealth();

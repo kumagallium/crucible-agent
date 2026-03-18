@@ -8,6 +8,7 @@ from collections.abc import AsyncIterator
 
 from crucible_agent.agent.adapter import (
     AdapterResult,
+    ApprovalCallback,
     StreamEvent,
     run as adapter_run,
     run_stream as adapter_run_stream,
@@ -67,17 +68,21 @@ async def run_agent_stream(
     server_names: list[str] | None = None,
     profile: str | None = None,
     custom_instructions: str | None = None,
+    require_approval: bool = False,
+    approval_callback: ApprovalCallback | None = None,
 ) -> AsyncIterator[StreamEvent]:
     """エージェントを実行し、イベントをストリームする（WebSocket 用）"""
     instruction = instruction or build_instruction(profile, custom_instructions)
     server_names = await _resolve_servers(server_names)
 
-    logger.info("Agent stream started (session=%s)", session_id)
+    logger.info("Agent stream started (session=%s, plan_mode=%s)", session_id, require_approval)
 
     async for event in adapter_run_stream(
         instruction=instruction,
         message=message,
         server_names=server_names,
+        require_approval=require_approval,
+        approval_callback=approval_callback,
     ):
         yield event
 

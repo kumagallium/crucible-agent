@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import uuid
@@ -135,23 +136,47 @@ async def agent_ws(websocket: WebSocket, session_id: str | None = None) -> None:
     await websocket.accept()
     session_id = session_id or str(uuid.uuid4())
 
+    # Plan モード用: tool_call_id → Future[bool] のマップ
+    pending_approvals: dict[str, asyncio.Future[bool]] = {}
+
+    async def approval_callback(tool_call_id: str, tool_name: str, tool_input: dict) -> bool:
+        """ツール実行前にユーザーの承認を待つ"""
+        loop = asyncio.get_event_loop()
+        future: asyncio.Future[bool] = loop.create_future()
+        pending_approvals[tool_call_id] = future
+        # approval_request は adapter 側から yield される
+        # ユーザーからの approval メッセージを待つ
+        return await future
+
     try:
         while True:
-            # クライアントからのメッセージを待つ
             data = await websocket.receive_text()
             msg = json.loads(data)
+
+            # Plan モード: 承認応答
+            if msg.get("type") == "approval":
+                tool_call_id = msg.get("tool_call_id", "")
+                approved = msg.get("approved", False)
+                future = pending_approvals.pop(tool_call_id, None)
+                if future and not future.done():
+                    future.set_result(approved)
+                continue
 
             if msg.get("type") == "message":
                 content = msg.get("content", "")
                 profile = msg.get("profile")
                 custom_instructions = msg.get("custom_instructions")
                 server_names = msg.get("server_names")
+                require_approval = msg.get("require_approval", False)
+
                 async for event in run_agent_stream(
                     message=content,
                     session_id=session_id,
                     profile=profile,
                     custom_instructions=custom_instructions,
                     server_names=server_names,
+                    require_approval=require_approval,
+                    approval_callback=approval_callback if require_approval else None,
                 ):
                     await websocket.send_json({
                         "type": event.type,
@@ -166,8 +191,15 @@ async def agent_ws(websocket: WebSocket, session_id: str | None = None) -> None:
 
     except WebSocketDisconnect:
         logger.info("WebSocket disconnected (session=%s)", session_id)
+        # 未処理の承認をキャンセル
+        for future in pending_approvals.values():
+            if not future.done():
+                future.set_result(False)
     except Exception as e:
         logger.exception("WebSocket error (session=%s)", session_id)
+        for future in pending_approvals.values():
+            if not future.done():
+                future.set_result(False)
         try:
             await websocket.send_json({"type": "error", "content": str(e)})
         except Exception:
