@@ -1,14 +1,16 @@
-"""REST エンドポイント — GET /health, GET /tools, POST /agent/run"""
+"""REST / WebSocket エンドポイント"""
 
 from __future__ import annotations
 
+import json
 import logging
+import uuid
 
 import httpx
-from fastapi import APIRouter
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from crucible_agent import __version__
-from crucible_agent.agent.runner import run_agent
+from crucible_agent.agent.runner import run_agent, run_agent_stream
 from crucible_agent.api.schemas import (
     AgentRunRequest,
     AgentRunResponse,
@@ -20,6 +22,7 @@ from crucible_agent.api.schemas import (
 )
 from crucible_agent.config import settings
 from crucible_agent.crucible.discovery import discover_servers
+from crucible_agent.provenance.recorder import record_agent_run
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -91,9 +94,61 @@ async def agent_run(req: AgentRunRequest) -> AgentRunResponse:
         session_id=req.session_id,
     )
 
+    # PROV-DM 来歴記録
+    provenance_id = None
+    try:
+        provenance_id = await record_agent_run(
+            session_id=result["session_id"],
+            user_message=req.message,
+            agent_response=result["message"],
+            tool_calls=result.get("tool_calls", []),
+        )
+    except Exception:
+        logger.warning("Provenance recording failed", exc_info=True)
+
     return AgentRunResponse(
         session_id=result["session_id"],
         message=result["message"],
-        tool_calls=[],  # Phase 3 で実装
+        tool_calls=[],
+        provenance_id=provenance_id,
         token_usage=TokenUsage(**result.get("token_usage", {})),
     )
+
+
+@router.websocket("/agent/ws")
+async def agent_ws(websocket: WebSocket, session_id: str | None = None) -> None:
+    """WebSocket でストリーミング応答を返す"""
+    await websocket.accept()
+    session_id = session_id or str(uuid.uuid4())
+
+    try:
+        while True:
+            # クライアントからのメッセージを待つ
+            data = await websocket.receive_text()
+            msg = json.loads(data)
+
+            if msg.get("type") == "message":
+                content = msg.get("content", "")
+                async for event in run_agent_stream(
+                    message=content,
+                    session_id=session_id,
+                ):
+                    await websocket.send_json({
+                        "type": event.type,
+                        "content": event.content,
+                        "tool_call_id": event.tool_call_id,
+                        "tool_name": event.tool_name,
+                        "input": event.input,
+                        "output": event.output,
+                        "duration_ms": event.duration_ms,
+                        "token_usage": event.token_usage,
+                    })
+
+    except WebSocketDisconnect:
+        logger.info("WebSocket disconnected (session=%s)", session_id)
+    except Exception as e:
+        logger.exception("WebSocket error (session=%s)", session_id)
+        try:
+            await websocket.send_json({"type": "error", "content": str(e)})
+        except Exception:
+            pass

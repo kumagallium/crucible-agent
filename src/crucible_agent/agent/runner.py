@@ -4,8 +4,14 @@ from __future__ import annotations
 
 import logging
 import uuid
+from collections.abc import AsyncIterator
 
-from crucible_agent.agent.adapter import AdapterResult, run as adapter_run
+from crucible_agent.agent.adapter import (
+    AdapterResult,
+    StreamEvent,
+    run as adapter_run,
+    run_stream as adapter_run_stream,
+)
 from crucible_agent.crucible.discovery import discover_servers
 
 logger = logging.getLogger(__name__)
@@ -18,29 +24,27 @@ DEFAULT_INSTRUCTION = (
 )
 
 
+async def _resolve_servers(server_names: list[str] | None) -> list[str]:
+    """サーバー名リストを解決する（未指定なら auto-discovery）"""
+    if server_names is not None:
+        return server_names
+    discovered = await discover_servers()
+    names = [s.name for s in discovered]
+    if names:
+        logger.info("Crucible から %d 台のサーバーを使用: %s", len(names), names)
+    return names
+
+
 async def run_agent(
     message: str,
     session_id: str | None = None,
     instruction: str | None = None,
     server_names: list[str] | None = None,
 ) -> dict:
-    """エージェントを実行して結果を返す
-
-    Args:
-        message: ユーザーメッセージ
-        session_id: セッション ID（省略時は新規生成）
-        instruction: システムプロンプト（省略時はデフォルト）
-        server_names: 使用する MCP サーバー名リスト
-    """
+    """エージェントを実行して結果を返す（同期版）"""
     session_id = session_id or str(uuid.uuid4())
     instruction = instruction or DEFAULT_INSTRUCTION
-
-    # Crucible auto-discovery でサーバーを取得（指定がなければ）
-    if server_names is None:
-        discovered = await discover_servers()
-        server_names = [s.name for s in discovered]
-        if server_names:
-            logger.info("Crucible から %d 台のサーバーを使用: %s", len(server_names), server_names)
+    server_names = await _resolve_servers(server_names)
 
     logger.info("Agent run started (session=%s)", session_id)
 
@@ -58,3 +62,25 @@ async def run_agent(
         "tool_calls": result.tool_calls,
         "token_usage": result.token_usage,
     }
+
+
+async def run_agent_stream(
+    message: str,
+    session_id: str | None = None,
+    instruction: str | None = None,
+    server_names: list[str] | None = None,
+) -> AsyncIterator[StreamEvent]:
+    """エージェントを実行し、イベントをストリームする（WebSocket 用）"""
+    instruction = instruction or DEFAULT_INSTRUCTION
+    server_names = await _resolve_servers(server_names)
+
+    logger.info("Agent stream started (session=%s)", session_id)
+
+    async for event in adapter_run_stream(
+        instruction=instruction,
+        message=message,
+        server_names=server_names,
+    ):
+        yield event
+
+    logger.info("Agent stream completed (session=%s)", session_id)
