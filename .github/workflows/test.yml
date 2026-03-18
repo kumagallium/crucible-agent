@@ -1,0 +1,50 @@
+name: Tests & Coverage
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  python-tests:
+    name: Python Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run tests with coverage
+        run: pytest
+
+      - name: Generate coverage summary
+        if: always()
+        run: |
+          python -c "
+          import json, os
+          with open('coverage.json') as f:
+              data = json.load(f)
+          totals = data['totals']
+          pct = totals['percent_covered_display']
+
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
+              summary.write('## Python Coverage\n\n')
+              summary.write(f'**Total: {pct}%**\n\n')
+              summary.write('| File | Stmts | Miss | Cover |\n')
+              summary.write('|------|-------|------|-------|\n')
+              for fname, fdata in data['files'].items():
+                  s = fdata['summary']
+                  short = fname.replace('src/crucible_agent/', '')
+                  summary.write(f'| {short} | {s[\"num_statements\"]} | {s[\"missing_lines\"]} | {s[\"percent_covered_display\"]}% |\n')
+          "

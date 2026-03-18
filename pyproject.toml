@@ -45,3 +45,14 @@ select = ["E", "F", "I", "N", "UP", "B", "A", "SIM"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+addopts = [
+    "-v",
+    "--tb=short",
+    "--cov=src/crucible_agent",
+    "--cov-report=term-missing",
+    "--cov-report=json:coverage.json",
+]
+
+[tool.coverage.run]
+source = ["src/crucible_agent"]
+omit = ["tests/*"]
