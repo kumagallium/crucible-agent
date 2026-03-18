@@ -136,31 +136,46 @@ async def agent_ws(websocket: WebSocket, session_id: str | None = None) -> None:
     await websocket.accept()
     session_id = session_id or str(uuid.uuid4())
 
-    # Plan モード用: tool_call_id → Future[bool] のマップ
+    # Plan モード用: tool_call_id → Future[bool]
     pending_approvals: dict[str, asyncio.Future[bool]] = {}
+    # 受信メッセージキュー（ストリーム中も受信するため）
+    incoming: asyncio.Queue[dict] = asyncio.Queue()
 
     async def approval_callback(tool_call_id: str, tool_name: str, tool_input: dict) -> bool:
         """ツール実行前にユーザーの承認を待つ"""
         loop = asyncio.get_event_loop()
         future: asyncio.Future[bool] = loop.create_future()
         pending_approvals[tool_call_id] = future
-        # approval_request は adapter 側から yield される
-        # ユーザーからの approval メッセージを待つ
         return await future
+
+    async def receive_loop():
+        """WebSocket からのメッセージを常時受信してキューに入れる"""
+        try:
+            while True:
+                data = await websocket.receive_text()
+                msg = json.loads(data)
+                # 承認応答は即座に処理
+                if msg.get("type") == "approval":
+                    tool_call_id = msg.get("tool_call_id", "")
+                    approved = msg.get("approved", False)
+                    future = pending_approvals.pop(tool_call_id, None)
+                    if future and not future.done():
+                        future.set_result(approved)
+                else:
+                    await incoming.put(msg)
+        except WebSocketDisconnect:
+            await incoming.put({"type": "_disconnect"})
+        except Exception:
+            await incoming.put({"type": "_disconnect"})
+
+    # 受信ループをバックグラウンドタスクで起動
+    receive_task = asyncio.create_task(receive_loop())
 
     try:
         while True:
-            data = await websocket.receive_text()
-            msg = json.loads(data)
-
-            # Plan モード: 承認応答
-            if msg.get("type") == "approval":
-                tool_call_id = msg.get("tool_call_id", "")
-                approved = msg.get("approved", False)
-                future = pending_approvals.pop(tool_call_id, None)
-                if future and not future.done():
-                    future.set_result(approved)
-                continue
+            msg = await incoming.get()
+            if msg.get("type") == "_disconnect":
+                break
 
             if msg.get("type") == "message":
                 content = msg.get("content", "")
@@ -189,18 +204,15 @@ async def agent_ws(websocket: WebSocket, session_id: str | None = None) -> None:
                         "token_usage": event.token_usage,
                     })
 
-    except WebSocketDisconnect:
-        logger.info("WebSocket disconnected (session=%s)", session_id)
-        # 未処理の承認をキャンセル
-        for future in pending_approvals.values():
-            if not future.done():
-                future.set_result(False)
     except Exception as e:
         logger.exception("WebSocket error (session=%s)", session_id)
-        for future in pending_approvals.values():
-            if not future.done():
-                future.set_result(False)
         try:
             await websocket.send_json({"type": "error", "content": str(e)})
         except Exception:
             pass
+    finally:
+        logger.info("WebSocket closed (session=%s)", session_id)
+        for future in pending_approvals.values():
+            if not future.done():
+                future.set_result(False)
+        receive_task.cancel()
