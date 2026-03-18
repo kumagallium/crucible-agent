@@ -413,6 +413,72 @@
       border: 1px solid var(--border);
       border-bottom-left-radius: 4px;
       box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+      white-space: normal;
+    }
+
+    /* Agent Markdown */
+    .msg.agent p { margin-bottom: 8px; }
+    .msg.agent p:last-child { margin-bottom: 0; }
+    .msg.agent strong { font-weight: 600; }
+    .msg.agent em { font-style: italic; }
+    .msg.agent code {
+      background: var(--muted);
+      padding: 1px 5px;
+      border-radius: 4px;
+      font-family: ui-monospace, 'SF Mono', monospace;
+      font-size: 13px;
+    }
+    .msg.agent pre {
+      background: var(--muted);
+      padding: 10px 12px;
+      border-radius: var(--radius-lg);
+      overflow-x: auto;
+      margin: 8px 0;
+      font-size: 12px;
+    }
+    .msg.agent pre code {
+      background: none;
+      padding: 0;
+    }
+    .msg.agent ul, .msg.agent ol {
+      margin: 6px 0;
+      padding-left: 20px;
+    }
+    .msg.agent li { margin-bottom: 4px; }
+    .msg.agent h1, .msg.agent h2, .msg.agent h3,
+    .msg.agent h4, .msg.agent h5, .msg.agent h6 {
+      margin: 12px 0 6px;
+      font-weight: 600;
+      color: var(--foreground);
+    }
+    .msg.agent h1 { font-size: 18px; }
+    .msg.agent h2 { font-size: 16px; }
+    .msg.agent h3 { font-size: 15px; }
+    .msg.agent table {
+      border-collapse: collapse;
+      margin: 8px 0;
+      font-size: 13px;
+      width: 100%;
+    }
+    .msg.agent th, .msg.agent td {
+      border: 1px solid var(--border);
+      padding: 6px 10px;
+      text-align: left;
+    }
+    .msg.agent th {
+      background: var(--muted);
+      font-weight: 600;
+    }
+    .msg.agent blockquote {
+      border-left: 3px solid var(--primary);
+      padding-left: 12px;
+      margin: 8px 0;
+      color: var(--muted-fg);
+    }
+    .msg.agent hr {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 12px 0;
     }
 
     .msg.tool {
@@ -698,8 +764,10 @@
           if (!currentAgentMsg) {
             currentAgentMsg = addMsg('', 'agent');
             currentAgentMsg.classList.add('typing');
+            currentAgentMsg._rawText = '';
           }
-          currentAgentMsg.textContent += data.content;
+          currentAgentMsg._rawText += data.content;
+          currentAgentMsg.innerHTML = renderMarkdown(currentAgentMsg._rawText);
           scrollToBottom();
           break;
         case 'approval_request':
@@ -714,6 +782,10 @@
         case 'done':
           if (currentAgentMsg) {
             currentAgentMsg.classList.remove('typing');
+            // 最終レンダリング
+            if (currentAgentMsg._rawText) {
+              currentAgentMsg.innerHTML = renderMarkdown(currentAgentMsg._rawText);
+            }
             currentAgentMsg = null;
           }
           sendBtn.disabled = false;
@@ -815,6 +887,75 @@
       const d = document.createElement('div');
       d.textContent = s;
       return d.innerHTML;
+    }
+
+    function renderMarkdown(text) {
+      let html = escapeHtml(text);
+
+      // コードブロック (```...```)
+      html = html.replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>');
+
+      // テーブル
+      html = html.replace(/^(\|.+\|)\n(\|[-| :]+\|)\n((?:\|.+\|\n?)*)/gm, (_, header, sep, body) => {
+        const ths = header.split('|').filter(c => c.trim()).map(c => `<th>${c.trim()}</th>`).join('');
+        const rows = body.trim().split('\n').map(row => {
+          const tds = row.split('|').filter(c => c.trim()).map(c => `<td>${c.trim()}</td>`).join('');
+          return `<tr>${tds}</tr>`;
+        }).join('');
+        return `<table><thead><tr>${ths}</tr></thead><tbody>${rows}</tbody></table>`;
+      });
+
+      // 見出し
+      html = html.replace(/^######\s+(.+)$/gm, '<h6>$1</h6>');
+      html = html.replace(/^#####\s+(.+)$/gm, '<h5>$1</h5>');
+      html = html.replace(/^####\s+(.+)$/gm, '<h4>$1</h4>');
+      html = html.replace(/^###\s+(.+)$/gm, '<h3>$1</h3>');
+      html = html.replace(/^##\s+(.+)$/gm, '<h2>$1</h2>');
+      html = html.replace(/^#\s+(.+)$/gm, '<h1>$1</h1>');
+
+      // 水平線
+      html = html.replace(/^---$/gm, '<hr>');
+
+      // 引用
+      html = html.replace(/^&gt;\s+(.+)$/gm, '<blockquote>$1</blockquote>');
+
+      // リスト
+      html = html.replace(/^(\d+)\.\s+(.+)$/gm, '<li>$2</li>');
+      html = html.replace(/^[-*]\s+(.+)$/gm, '<li>$1</li>');
+      html = html.replace(/(<li>.*<\/li>\n?)+/g, m => {
+        return m.includes('1.') ? `<ol>${m}</ol>` : `<ul>${m}</ul>`;
+      });
+
+      // インラインコード
+      html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+      // 太字・斜体
+      html = html.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
+      html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+      html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+
+      // 段落（空行で分割）
+      html = html.replace(/\n\n+/g, '</p><p>');
+      html = '<p>' + html + '</p>';
+      // 空の p タグを除去
+      html = html.replace(/<p>\s*<\/p>/g, '');
+      // p の中に block 要素がある場合の修正
+      html = html.replace(/<p>(<h[1-6]>)/g, '$1');
+      html = html.replace(/(<\/h[1-6]>)<\/p>/g, '$1');
+      html = html.replace(/<p>(<pre>)/g, '$1');
+      html = html.replace(/(<\/pre>)<\/p>/g, '$1');
+      html = html.replace(/<p>(<table>)/g, '$1');
+      html = html.replace(/(<\/table>)<\/p>/g, '$1');
+      html = html.replace(/<p>(<ul>)/g, '$1');
+      html = html.replace(/(<\/ul>)<\/p>/g, '$1');
+      html = html.replace(/<p>(<ol>)/g, '$1');
+      html = html.replace(/(<\/ol>)<\/p>/g, '$1');
+      html = html.replace(/<p>(<hr>)/g, '$1');
+      html = html.replace(/(<hr>)<\/p>/g, '$1');
+      html = html.replace(/<p>(<blockquote>)/g, '$1');
+      html = html.replace(/(<\/blockquote>)<\/p>/g, '$1');
+
+      return html;
     }
 
     // --- イベント ---
