@@ -13,21 +13,29 @@ from crucible_agent.agent.adapter import (
     run as adapter_run,
     run_stream as adapter_run_stream,
 )
-from crucible_agent.crucible.discovery import discover_servers
+from crucible_agent.crucible.discovery import DiscoveredServer, discover_servers
 from crucible_agent.prompts.loader import build_instruction
 
 logger = logging.getLogger(__name__)
 
 
-async def _resolve_servers(server_names: list[str] | None) -> list[str]:
-    """サーバー名リストを解決する（未指定なら auto-discovery）"""
-    if server_names is not None:
-        return server_names
+async def _resolve_servers(
+    server_names: list[str] | None,
+) -> tuple[list[str], list[DiscoveredServer]]:
+    """サーバー名リストを解決する（未指定なら auto-discovery）
+
+    Returns:
+        (server_names, discovered_servers)
+    """
     discovered = await discover_servers()
+    if server_names is not None:
+        # 指定されたサーバー名だけフィルタ
+        filtered = [s for s in discovered if s.name in server_names]
+        return server_names, filtered
     names = [s.name for s in discovered]
     if names:
         logger.info("Crucible から %d 台のサーバーを使用: %s", len(names), names)
-    return names
+    return names, discovered
 
 
 async def run_agent(
@@ -41,7 +49,7 @@ async def run_agent(
     """エージェントを実行して結果を返す（同期版）"""
     session_id = session_id or str(uuid.uuid4())
     instruction = instruction or build_instruction(profile, custom_instructions)
-    server_names = await _resolve_servers(server_names)
+    server_names, discovered = await _resolve_servers(server_names)
 
     logger.info("Agent run started (session=%s)", session_id)
 
@@ -49,6 +57,7 @@ async def run_agent(
         instruction=instruction,
         message=message,
         server_names=server_names,
+        discovered_servers=discovered,
     )
 
     logger.info("Agent run completed (session=%s)", session_id)
@@ -73,7 +82,7 @@ async def run_agent_stream(
 ) -> AsyncIterator[StreamEvent]:
     """エージェントを実行し、イベントをストリームする（WebSocket 用）"""
     instruction = instruction or build_instruction(profile, custom_instructions)
-    server_names = await _resolve_servers(server_names)
+    server_names, discovered = await _resolve_servers(server_names)
 
     logger.info("Agent stream started (session=%s, plan_mode=%s)", session_id, require_approval)
 
@@ -81,6 +90,7 @@ async def run_agent_stream(
         instruction=instruction,
         message=message,
         server_names=server_names,
+        discovered_servers=discovered,
         require_approval=require_approval,
         approval_callback=approval_callback,
     ):

@@ -27,6 +27,12 @@ from mcp_agent.workflows.llm.augmented_llm_openai import OpenAIAugmentedLLM
 
 from crucible_agent.config import settings
 
+# 循環 import 回避のため TYPE_CHECKING で import
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from crucible_agent.crucible.discovery import DiscoveredServer
+
 logger = logging.getLogger(__name__)
 
 
@@ -54,44 +60,51 @@ class AdapterResult:
     token_usage: dict
 
 
-def _build_mcp_settings(server_configs: dict[str, MCPServerSettings] | None = None) -> MCPAgentSettings:
-    """mcp-agent 用の Settings を組み立てる"""
-    mcp = MCPSettings(servers=server_configs or {})
+def _discovered_to_server_configs(
+    discovered: list[DiscoveredServer],
+) -> dict[str, MCPServerSettings]:
+    """DiscoveredServer リストを mcp-agent の MCPServerSettings に変換"""
+    configs: dict[str, MCPServerSettings] = {}
+    for s in discovered:
+        configs[s.name] = MCPServerSettings(
+            url=s.url,
+            transport=s.transport if s.transport != "streamable-http" else "sse",
+        )
+        logger.debug("MCP server config: %s → %s (%s)", s.name, s.url, s.transport)
+    return configs
+
+
+def _build_mcp_app(discovered: list[DiscoveredServer] | None = None) -> MCPApp:
+    """discovery 結果から MCPApp を構築する"""
+    server_configs = _discovered_to_server_configs(discovered or [])
+    mcp = MCPSettings(servers=server_configs)
     openai = OpenAISettings(
         default_model=settings.llm_model,
         base_url=f"{settings.litellm_api_base}/v1",
         api_key=settings.litellm_api_key,
     )
-    return MCPAgentSettings(
+    mcp_settings = MCPAgentSettings(
         execution_engine="asyncio",
         mcp=mcp,
         openai=openai,
     )
-
-
-# アプリケーションレベルの MCPApp インスタンス
-_mcp_app: MCPApp | None = None
-
-
-def get_mcp_app(
-    server_configs: dict[str, MCPServerSettings] | None = None,
-) -> MCPApp:
-    """MCPApp のシングルトンを取得（初回呼び出し時に生成）"""
-    global _mcp_app
-    if _mcp_app is None:
-        mcp_settings = _build_mcp_settings(server_configs)
-        _mcp_app = MCPApp(name="crucible_agent", settings=mcp_settings)
-        logger.info("MCPApp initialized (model=%s, base_url=%s)", settings.llm_model, settings.litellm_api_base)
-    return _mcp_app
+    app = MCPApp(name="crucible_agent", settings=mcp_settings)
+    logger.info(
+        "MCPApp created (model=%s, servers=%s)",
+        settings.llm_model,
+        list(server_configs.keys()),
+    )
+    return app
 
 
 async def run(
     instruction: str,
     message: str,
     server_names: list[str] | None = None,
+    discovered_servers: list[DiscoveredServer] | None = None,
 ) -> AdapterResult:
     """mcp-agent を使ってエージェントを1回実行する（同期版）"""
-    mcp_app = get_mcp_app()
+    mcp_app = _build_mcp_app(discovered_servers)
 
     tool_calls: list[dict] = []
     full_text = ""
@@ -129,17 +142,18 @@ async def run_stream(
     instruction: str,
     message: str,
     server_names: list[str] | None = None,
+    discovered_servers: list[DiscoveredServer] | None = None,
     require_approval: bool = False,
     approval_callback: ApprovalCallback | None = None,
 ) -> AsyncIterator[StreamEvent]:
     """mcp-agent を使ってエージェントを実行し、イベントをストリームする
 
     Args:
+        discovered_servers: discovery で検出されたサーバー情報（URL 含む）
         require_approval: True の場合、ツール実行前に承認を求める
         approval_callback: 承認リクエスト時に呼ばれるコールバック。
-                           Future[bool] を返し、ユーザーの応答を待つ。
     """
-    mcp_app = get_mcp_app()
+    mcp_app = _build_mcp_app(discovered_servers)
 
     async with mcp_app.run():
         agent = Agent(
