@@ -4,119 +4,186 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Crucible Agent</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #1a1a2e;
-      --surface: #16213e;
-      --surface2: #0f3460;
-      --accent: #e94560;
-      --accent2: #533483;
-      --text: #eee;
-      --text-muted: #999;
-      --user-bg: #0f3460;
-      --agent-bg: #1a1a2e;
-      --tool-bg: #2a1a3e;
-      --border: #333;
+      /* Crucible Design System */
+      --background: #fafdf7;
+      --foreground: #1a2e1d;
+      --card: #ffffff;
+      --border: #d5e0d7;
+      --muted: #f0f5ef;
+      --muted-fg: #6b7f6e;
+      --primary: #4B7A52;
+      --primary-fg: #ffffff;
+      --secondary: #f0f5ef;
+      --secondary-fg: #2d4a32;
+      --accent: #e8f0e8;
+      --accent-fg: #2d4a32;
+      --ring: #4B7A52;
+
+      /* Status */
+      --running-bg: #edf5ee; --running-fg: #3d6844; --running-border: #b8d4bb;
+      --error-bg: #fef2f2; --error-fg: #dc2626; --error-border: #fecaca;
+      --warn-bg: #fffbeb; --warn-fg: #b45309; --warn-border: #fde68a;
+      --info-bg: #f0f9ff; --info-fg: #0369a1; --info-border: #bae6fd;
+
       --sidebar-w: 280px;
+      --radius-xl: 12px;
+      --radius-lg: 8px;
+      --radius-full: 9999px;
     }
+
     * { margin: 0; padding: 0; box-sizing: border-box; }
+
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      background: var(--bg);
-      color: var(--text);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--background);
+      color: var(--foreground);
       height: 100vh;
       display: flex;
+      font-size: 14px;
+      line-height: 1.6;
     }
 
     /* --- サイドバー --- */
     #sidebar {
       width: var(--sidebar-w);
-      background: var(--surface);
+      background: var(--card);
       border-right: 1px solid var(--border);
       display: flex;
       flex-direction: column;
       overflow-y: auto;
       flex-shrink: 0;
     }
-    #sidebar h2 {
-      padding: 16px;
-      font-size: 16px;
+
+    #sidebar .logo {
+      padding: 16px 20px;
       border-bottom: 1px solid var(--border);
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 10px;
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--primary);
     }
+
     .sidebar-section {
-      padding: 12px 16px;
+      padding: 14px 16px;
       border-bottom: 1px solid var(--border);
     }
+
     .sidebar-section h3 {
       font-size: 11px;
+      font-weight: 600;
       text-transform: uppercase;
-      color: var(--text-muted);
-      margin-bottom: 8px;
+      color: var(--muted-fg);
+      margin-bottom: 10px;
       letter-spacing: 0.5px;
     }
-    .sidebar-section select, .sidebar-section input {
+
+    .sidebar-section select,
+    .sidebar-section input {
       width: 100%;
-      background: var(--bg);
-      color: var(--text);
+      background: var(--background);
+      color: var(--foreground);
       border: 1px solid var(--border);
-      padding: 6px 8px;
-      border-radius: 6px;
+      padding: 7px 10px;
+      border-radius: var(--radius-lg);
       font-size: 13px;
-      margin-bottom: 6px;
+      font-family: inherit;
+      margin-bottom: 8px;
+      transition: border-color 0.2s;
     }
-    .sidebar-section select:focus, .sidebar-section input:focus {
+
+    .sidebar-section select:focus,
+    .sidebar-section input:focus {
       outline: none;
-      border-color: var(--accent);
+      border-color: var(--ring);
+      box-shadow: 0 0 0 2px rgba(75, 122, 82, 0.15);
     }
+
     .sidebar-section textarea {
       width: 100%;
-      background: var(--bg);
-      color: var(--text);
+      background: var(--background);
+      color: var(--foreground);
       border: 1px solid var(--border);
-      padding: 6px 8px;
-      border-radius: 6px;
+      padding: 7px 10px;
+      border-radius: var(--radius-lg);
       font-size: 12px;
       font-family: inherit;
       resize: vertical;
       min-height: 60px;
+      transition: border-color 0.2s;
     }
-    .sidebar-section textarea:focus { outline: none; border-color: var(--accent); }
+
+    .sidebar-section textarea:focus {
+      outline: none;
+      border-color: var(--ring);
+      box-shadow: 0 0 0 2px rgba(75, 122, 82, 0.15);
+    }
+
     .sidebar-section label {
       font-size: 12px;
-      color: var(--text-muted);
+      font-weight: 500;
+      color: var(--muted-fg);
       display: block;
       margin-bottom: 4px;
     }
 
-    /* ステータスバッジ */
+    /* バッジ */
     .badge {
       display: inline-block;
-      font-size: 10px;
-      padding: 1px 6px;
-      border-radius: 8px;
-      margin-left: 4px;
+      font-size: 11px;
+      font-weight: 500;
+      padding: 1px 8px;
+      border-radius: var(--radius-full);
+      border: 1px solid;
     }
-    .badge.ok { background: #1b4332; color: #95d5b2; }
-    .badge.err { background: #3d0000; color: #ff6b6b; }
-    .badge.warn { background: #3d3000; color: #ffd166; }
 
-    /* ツールリスト */
-    .tool-item {
-      padding: 6px 8px;
-      background: var(--bg);
-      border-radius: 6px;
-      margin-bottom: 4px;
-      font-size: 12px;
+    .badge.ok { background: var(--running-bg); color: var(--running-fg); border-color: var(--running-border); }
+    .badge.err { background: var(--error-bg); color: var(--error-fg); border-color: var(--error-border); }
+    .badge.warn { background: var(--warn-bg); color: var(--warn-fg); border-color: var(--warn-border); }
+
+    /* ステータス行 */
+    .status-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 3px 0;
+      font-size: 13px;
     }
-    .tool-item .name { font-weight: 600; }
-    .tool-item .desc { color: var(--text-muted); font-size: 11px; margin-top: 2px; }
+
+    .status-row .label { color: var(--muted-fg); }
+
+    /* ツールカード */
+    .tool-item {
+      padding: 8px 10px;
+      background: var(--background);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      margin-bottom: 6px;
+      transition: box-shadow 0.2s;
+    }
+
+    .tool-item:hover { box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+    .tool-item .name { font-size: 13px; font-weight: 600; color: var(--foreground); }
+    .tool-item .desc { font-size: 11px; color: var(--muted-fg); margin-top: 2px; }
     .tool-item .transport {
       font-size: 10px;
-      color: var(--accent);
+      font-weight: 500;
+      color: var(--primary);
       float: right;
+      background: var(--accent);
+      padding: 1px 6px;
+      border-radius: var(--radius-full);
+    }
+
+    .source-info {
+      margin-top: 10px;
+      font-size: 11px;
+      color: var(--muted-fg);
     }
 
     /* --- メインエリア --- */
@@ -125,85 +192,161 @@
       display: flex;
       flex-direction: column;
       min-width: 0;
+      background: var(--background);
     }
+
     header {
       padding: 10px 20px;
-      background: var(--surface);
+      background: var(--card);
       border-bottom: 1px solid var(--border);
       display: flex;
       align-items: center;
       gap: 10px;
       font-size: 13px;
     }
-    header .status {
-      font-size: 11px;
-      padding: 2px 8px;
-      border-radius: 10px;
-    }
-    header .status.connected { background: #1b4332; color: #95d5b2; }
-    header .status.disconnected { background: #3d0000; color: #ff6b6b; }
-    header .spacer { flex: 1; }
-    header .health-item { color: var(--text-muted); font-size: 11px; }
 
+    header .conn-status {
+      font-size: 11px;
+      font-weight: 500;
+      padding: 2px 10px;
+      border-radius: var(--radius-full);
+      border: 1px solid;
+    }
+
+    header .conn-status.connected {
+      background: var(--running-bg);
+      color: var(--running-fg);
+      border-color: var(--running-border);
+    }
+
+    header .conn-status.disconnected {
+      background: var(--error-bg);
+      color: var(--error-fg);
+      border-color: var(--error-border);
+    }
+
+    header .spacer { flex: 1; }
+    header .health-summary { font-size: 12px; color: var(--muted-fg); }
+
+    /* メッセージエリア */
     #messages {
       flex: 1;
       overflow-y: auto;
-      padding: 16px;
+      padding: 20px;
       display: flex;
       flex-direction: column;
-      gap: 12px;
+      gap: 14px;
     }
+
     .msg {
-      max-width: 80%;
-      padding: 10px 14px;
-      border-radius: 12px;
-      line-height: 1.6;
+      max-width: 75%;
+      padding: 12px 16px;
+      border-radius: var(--radius-xl);
+      line-height: 1.7;
       font-size: 14px;
       white-space: pre-wrap;
       word-break: break-word;
     }
-    .msg.user { align-self: flex-end; background: var(--user-bg); border-bottom-right-radius: 4px; }
-    .msg.agent { align-self: flex-start; background: var(--agent-bg); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
-    .msg.tool { align-self: flex-start; background: var(--tool-bg); border: 1px solid #4a2060; border-radius: 8px; font-size: 12px; max-width: 60%; }
-    .msg.tool .label { font-size: 11px; color: #b088cc; margin-bottom: 4px; }
-    .msg.tool code { font-size: 11px; color: var(--text-muted); }
-    .msg.system { align-self: center; color: var(--text-muted); font-size: 12px; font-style: italic; }
-    .typing { opacity: 0.7; }
-    .typing::after { content: '▊'; animation: blink 0.7s infinite; }
+
+    .msg.user {
+      align-self: flex-end;
+      background: var(--primary);
+      color: var(--primary-fg);
+      border-bottom-right-radius: 4px;
+      box-shadow: 0 1px 3px rgba(75, 122, 82, 0.2);
+    }
+
+    .msg.agent {
+      align-self: flex-start;
+      background: var(--card);
+      color: var(--foreground);
+      border: 1px solid var(--border);
+      border-bottom-left-radius: 4px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+    }
+
+    .msg.tool {
+      align-self: flex-start;
+      background: var(--info-bg);
+      border: 1px solid var(--info-border);
+      border-radius: var(--radius-lg);
+      font-size: 12px;
+      max-width: 60%;
+    }
+
+    .msg.tool .tool-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--info-fg);
+      margin-bottom: 4px;
+    }
+
+    .msg.tool code {
+      font-size: 11px;
+      color: var(--muted-fg);
+      font-family: ui-monospace, 'SF Mono', monospace;
+    }
+
+    .msg.system {
+      align-self: center;
+      color: var(--muted-fg);
+      font-size: 12px;
+      font-style: italic;
+    }
+
+    .typing { opacity: 0.8; }
+    .typing::after {
+      content: '▊';
+      color: var(--primary);
+      animation: blink 0.7s infinite;
+    }
+
     @keyframes blink { 50% { opacity: 0; } }
 
+    /* 入力エリア */
     #input-area {
-      padding: 12px 16px;
-      background: var(--surface);
+      padding: 14px 20px;
+      background: var(--card);
       border-top: 1px solid var(--border);
       display: flex;
-      gap: 8px;
+      gap: 10px;
     }
+
     #input-area textarea {
       flex: 1;
-      background: var(--bg);
-      color: var(--text);
+      background: var(--background);
+      color: var(--foreground);
       border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 10px 12px;
+      border-radius: var(--radius-lg);
+      padding: 10px 14px;
       font-size: 14px;
       font-family: inherit;
       resize: none;
       min-height: 44px;
       max-height: 120px;
+      transition: border-color 0.2s;
     }
-    #input-area textarea:focus { outline: none; border-color: var(--accent); }
+
+    #input-area textarea:focus {
+      outline: none;
+      border-color: var(--ring);
+      box-shadow: 0 0 0 2px rgba(75, 122, 82, 0.15);
+    }
+
     #input-area button {
-      background: var(--accent);
-      color: white;
+      background: var(--primary);
+      color: var(--primary-fg);
       border: none;
-      border-radius: 8px;
-      padding: 0 20px;
+      border-radius: var(--radius-lg);
+      padding: 0 22px;
       font-size: 14px;
+      font-weight: 500;
+      font-family: inherit;
       cursor: pointer;
-      transition: opacity 0.2s;
+      transition: all 0.2s;
     }
-    #input-area button:hover { opacity: 0.85; }
+
+    #input-area button:hover { background: #3d6844; }
     #input-area button:disabled { opacity: 0.4; cursor: not-allowed; }
 
     /* レスポンシブ */
@@ -215,12 +358,12 @@
 <body>
   <!-- サイドバー -->
   <div id="sidebar">
-    <h2>⚗️ Crucible Agent</h2>
+    <div class="logo">⚗️ Crucible Agent</div>
 
     <!-- ヘルスステータス -->
     <div class="sidebar-section" id="health-section">
       <h3>Status</h3>
-      <div id="health-list" style="font-size:12px;">読み込み中...</div>
+      <div id="health-list">読み込み中...</div>
     </div>
 
     <!-- プロファイル設定 -->
@@ -236,16 +379,16 @@
     <!-- ツール一覧 -->
     <div class="sidebar-section">
       <h3>Tools</h3>
-      <div id="tool-list" style="font-size:12px;">読み込み中...</div>
+      <div id="tool-list">読み込み中...</div>
     </div>
   </div>
 
   <!-- メイン -->
   <div id="main">
     <header>
-      <span id="status" class="status disconnected">切断</span>
+      <span id="status" class="conn-status disconnected">切断</span>
       <span class="spacer"></span>
-      <span id="header-info" class="health-item"></span>
+      <span id="header-info" class="health-summary"></span>
     </header>
 
     <div id="messages"></div>
@@ -279,11 +422,14 @@
           let html = '';
           for (const [k, v] of Object.entries(data.components || {})) {
             const cls = v === 'ok' ? 'ok' : v === 'degraded' ? 'warn' : 'err';
-            html += `<div>${k} <span class="badge ${cls}">${v}</span></div>`;
+            html += `<div class="status-row">
+              <span class="label">${k}</span>
+              <span class="badge ${cls}">${v}</span>
+            </div>`;
           }
-          html += `<div style="margin-top:6px;color:var(--text-muted)">v${data.version}</div>`;
+          html += `<div style="margin-top:8px;font-size:11px;color:var(--muted-fg)">v${data.version}</div>`;
           healthListEl.innerHTML = html;
-          headerInfoEl.textContent = `status: ${data.status}`;
+          headerInfoEl.textContent = data.status;
         })
         .catch(() => { healthListEl.textContent = '取得失敗'; });
     }
@@ -307,22 +453,19 @@
         .then(r => r.json())
         .then(data => {
           if (!data.tools || data.tools.length === 0) {
-            toolListEl.innerHTML = '<div style="color:var(--text-muted)">ツールなし</div>';
+            toolListEl.innerHTML = '<div style="color:var(--muted-fg);font-size:12px;">ツールが見つかりません</div>';
             return;
           }
           let html = '';
           for (const t of data.tools) {
             html += `<div class="tool-item">
-              <span class="transport">${t.transport}</span>
-              <div class="name">${t.display_name || t.name}</div>
-              ${t.description ? `<div class="desc">${t.description}</div>` : ''}
+              <span class="transport">${escapeHtml(t.transport)}</span>
+              <div class="name">${escapeHtml(t.display_name || t.name)}</div>
+              ${t.description ? `<div class="desc">${escapeHtml(t.description)}</div>` : ''}
             </div>`;
           }
-          // ソース情報
           for (const [k, s] of Object.entries(data.sources || {})) {
-            html += `<div style="margin-top:8px;color:var(--text-muted);font-size:11px;">
-              ${k}: ${s.server_count} servers (${s.status})
-            </div>`;
+            html += `<div class="source-info">${escapeHtml(k)}: ${s.server_count} servers</div>`;
           }
           toolListEl.innerHTML = html;
         })
@@ -337,14 +480,14 @@
 
       ws.onopen = () => {
         statusEl.textContent = '接続中';
-        statusEl.className = 'status connected';
+        statusEl.className = 'conn-status connected';
         sendBtn.disabled = false;
         addSystemMsg('エージェントに接続しました');
       };
 
       ws.onclose = () => {
         statusEl.textContent = '切断';
-        statusEl.className = 'status disconnected';
+        statusEl.className = 'conn-status disconnected';
         sendBtn.disabled = true;
         setTimeout(connect, 3000);
       };
@@ -417,7 +560,7 @@
     function addToolMsg(label, detail) {
       const el = document.createElement('div');
       el.className = 'msg tool';
-      el.innerHTML = `<div class="label">${escapeHtml(label)}</div><code>${escapeHtml(detail)}</code>`;
+      el.innerHTML = `<div class="tool-label">${escapeHtml(label)}</div><code>${escapeHtml(detail)}</code>`;
       messagesEl.appendChild(el);
       scrollToBottom();
     }
@@ -461,8 +604,6 @@
     loadProfiles();
     loadTools();
     connect();
-
-    // 定期的にヘルスを更新
     setInterval(loadHealth, 30000);
   </script>
 </body>

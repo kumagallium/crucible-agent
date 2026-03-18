@@ -23,7 +23,8 @@ Frontend (ELN, Chat UI, CLI, etc.)
 ```bash
 git clone https://github.com/kumagallium/crucible-agent.git
 cd crucible-agent
-cp .env.example .env   # Edit with your API keys
+./setup.sh             # Generates .env from template
+# Edit .env with your API keys
 docker compose up -d
 ```
 
@@ -38,10 +39,10 @@ Tested on **Ubuntu 22.04 LTS**. The setup script installs Docker, configures sec
 ```bash
 git clone https://github.com/kumagallium/crucible-agent.git
 cd crucible-agent
-sudo bash setup.sh
+sudo bash setup-server.sh
 ```
 
-### What `setup.sh` does
+### What `setup-server.sh` does
 
 | Step | Description |
 |------|-------------|
@@ -56,7 +57,7 @@ sudo bash setup.sh
 
 ```bash
 # Change SSH port (recommended for production)
-SSH_PORT=<your-port> sudo bash setup.sh
+SSH_PORT=<your-port> sudo bash setup-server.sh
 ```
 
 ### Access after deployment
