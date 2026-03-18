@@ -23,6 +23,7 @@ class AgentRunRequest(BaseModel):
     session_id: str | None = Field(default=None, description="会話セッション ID（省略時は新規作成）")
     profile: str | None = Field(default=None, description="プロンプトプロファイル名（例: science, general）")
     custom_instructions: str | None = Field(default=None, description="カスタム指示（プロファイルに追加）")
+    server_names: list[str] | None = Field(default=None, description="使用するツール名リスト（省略時は全ツール）")
     options: AgentRunOptions = Field(default_factory=AgentRunOptions)
 
 

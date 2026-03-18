@@ -107,6 +107,7 @@ async def agent_run(req: AgentRunRequest) -> AgentRunResponse:
         session_id=req.session_id,
         profile=req.profile,
         custom_instructions=req.custom_instructions,
+        server_names=req.server_names,
     )
 
     # PROV-DM 来歴記録
