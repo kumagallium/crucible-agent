@@ -59,14 +59,16 @@
     }
 
     #sidebar .logo {
-      padding: 16px 20px;
+      padding: 8px 12px;
       border-bottom: 1px solid var(--border);
       display: flex;
       align-items: center;
-      gap: 10px;
-      font-size: 16px;
-      font-weight: 600;
-      color: var(--primary);
+    }
+
+    #sidebar .logo img {
+      height: 36px;
+      margin: -4px -6px;
+      object-fit: contain;
     }
 
     .sidebar-section {
@@ -358,7 +360,7 @@
 <body>
   <!-- サイドバー -->
   <div id="sidebar">
-    <div class="logo">⚗️ Crucible Agent</div>
+    <div class="logo"><img src="/chat-ui/logo.png" alt="Crucible Agent"></div>
 
     <!-- ヘルスステータス -->
     <div class="sidebar-section" id="health-section">
