@@ -5,9 +5,9 @@ model_list:
   # さくらのAI Engine
   - model_name: sakura
     litellm_params:
-      model: openai/${LLM_MODEL}
-      api_base: ${SAKURA_AI_API_BASE}
-      api_key: ${SAKURA_AI_API_KEY}
+      model: openai/gpt-oss-120b
+      api_base: os.environ/SAKURA_AI_API_BASE
+      api_key: os.environ/SAKURA_AI_API_KEY
 
   # Ollama（ローカル開発用、オプション）
   # - model_name: ollama-local
@@ -17,7 +17,7 @@ model_list:
 
 general_settings:
   master_key: sk-crucible-agent-dev
-  # store_model_in_db: false  # 開発時はDBなしでOK
+  store_model_in_db: false
 
 litellm_settings:
   drop_params: true  # 未対応パラメータを自動除外

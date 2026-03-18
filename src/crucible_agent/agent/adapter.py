@@ -56,6 +56,7 @@ def _build_mcp_settings(server_configs: dict[str, MCPServerSettings] | None = No
     openai = OpenAISettings(
         default_model=settings.llm_model,
         base_url=f"{settings.litellm_api_base}/v1",
+        api_key=settings.litellm_api_key,
     )
     return MCPAgentSettings(
         execution_engine="asyncio",

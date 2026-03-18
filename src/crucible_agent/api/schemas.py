@@ -21,7 +21,8 @@ class AgentRunRequest(BaseModel):
 
     message: str = Field(..., description="ユーザーのメッセージ")
     session_id: str | None = Field(default=None, description="会話セッション ID（省略時は新規作成）")
-    profile_config_id: str | None = Field(default=None, description="プロファイル設定 ID")
+    profile: str | None = Field(default=None, description="プロンプトプロファイル名（例: science, general）")
+    custom_instructions: str | None = Field(default=None, description="カスタム指示（プロファイルに追加）")
     options: AgentRunOptions = Field(default_factory=AgentRunOptions)
 
 
@@ -53,7 +54,20 @@ class AgentRunResponse(BaseModel):
     token_usage: TokenUsage = Field(default_factory=TokenUsage)
 
 
-# --- GET /health ---
+# --- GET /profiles ---
+
+
+class ProfileInfo(BaseModel):
+    """プロファイル情報"""
+
+    name: str
+    description: str = ""
+
+
+class ProfilesResponse(BaseModel):
+    """GET /profiles レスポンス"""
+
+    profiles: list[ProfileInfo] = Field(default_factory=list)
 
 
 # --- GET /tools ---

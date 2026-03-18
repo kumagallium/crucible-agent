@@ -17,8 +17,7 @@ RUN uv sync --frozen --no-dev
 # Copy application code
 COPY src/ src/
 COPY mcp_agent.config.yaml .
-# chat-ui/ は実装後に追加
-# COPY chat-ui/ chat-ui/
+COPY chat-ui/ chat-ui/
 
 # Expose port
 EXPOSE 8090

@@ -13,15 +13,9 @@ from crucible_agent.agent.adapter import (
     run_stream as adapter_run_stream,
 )
 from crucible_agent.crucible.discovery import discover_servers
+from crucible_agent.prompts.loader import build_instruction
 
 logger = logging.getLogger(__name__)
-
-# デフォルトのシステムプロンプト（Phase 4 でプロファイルから読み込む）
-DEFAULT_INSTRUCTION = (
-    "You are a helpful AI assistant. "
-    "Use the available tools to assist the user. "
-    "Be concise and accurate."
-)
 
 
 async def _resolve_servers(server_names: list[str] | None) -> list[str]:
@@ -40,10 +34,12 @@ async def run_agent(
     session_id: str | None = None,
     instruction: str | None = None,
     server_names: list[str] | None = None,
+    profile: str | None = None,
+    custom_instructions: str | None = None,
 ) -> dict:
     """エージェントを実行して結果を返す（同期版）"""
     session_id = session_id or str(uuid.uuid4())
-    instruction = instruction or DEFAULT_INSTRUCTION
+    instruction = instruction or build_instruction(profile, custom_instructions)
     server_names = await _resolve_servers(server_names)
 
     logger.info("Agent run started (session=%s)", session_id)
@@ -69,9 +65,11 @@ async def run_agent_stream(
     session_id: str | None = None,
     instruction: str | None = None,
     server_names: list[str] | None = None,
+    profile: str | None = None,
+    custom_instructions: str | None = None,
 ) -> AsyncIterator[StreamEvent]:
     """エージェントを実行し、イベントをストリームする（WebSocket 用）"""
-    instruction = instruction or DEFAULT_INSTRUCTION
+    instruction = instruction or build_instruction(profile, custom_instructions)
     server_names = await _resolve_servers(server_names)
 
     logger.info("Agent stream started (session=%s)", session_id)

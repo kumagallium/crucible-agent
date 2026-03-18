@@ -8,6 +8,7 @@ class Settings(BaseSettings):
 
     # --- LLM ---
     litellm_api_base: str = "http://litellm:4000"
+    litellm_api_key: str = "sk-crucible-agent-dev"
     llm_model: str = "sakura"
 
     # --- Crucible ---
