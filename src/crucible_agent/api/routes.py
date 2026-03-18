@@ -38,8 +38,9 @@ async def health() -> HealthResponse:
 
     # LiteLLM Proxy の疎通確認
     try:
+        litellm_headers = {"Authorization": f"Bearer {settings.litellm_api_key}"}
         async with httpx.AsyncClient(timeout=3.0) as client:
-            resp = await client.get(f"{settings.litellm_api_base}/health")
+            resp = await client.get(f"{settings.litellm_api_base}/health", headers=litellm_headers)
             components["litellm"] = "ok" if resp.status_code == 200 else "degraded"
     except Exception:
         components["litellm"] = "unavailable"
