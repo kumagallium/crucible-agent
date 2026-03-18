@@ -6,6 +6,7 @@ import logging
 import uuid
 
 from crucible_agent.agent.adapter import AdapterResult, run as adapter_run
+from crucible_agent.crucible.discovery import discover_servers
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +34,13 @@ async def run_agent(
     """
     session_id = session_id or str(uuid.uuid4())
     instruction = instruction or DEFAULT_INSTRUCTION
+
+    # Crucible auto-discovery でサーバーを取得（指定がなければ）
+    if server_names is None:
+        discovered = await discover_servers()
+        server_names = [s.name for s in discovered]
+        if server_names:
+            logger.info("Crucible から %d 台のサーバーを使用: %s", len(server_names), server_names)
 
     logger.info("Agent run started (session=%s)", session_id)
 

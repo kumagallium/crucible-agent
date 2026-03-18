@@ -56,6 +56,38 @@ class AgentRunResponse(BaseModel):
 # --- GET /health ---
 
 
+# --- GET /tools ---
+
+
+class ToolInfo(BaseModel):
+    """検出されたツール情報"""
+
+    name: str
+    display_name: str
+    description: str
+    url: str
+    transport: str
+    status: str
+
+
+class ToolSourceInfo(BaseModel):
+    """ツールソースの接続状態"""
+
+    url: str
+    status: str
+    server_count: int
+
+
+class ToolsResponse(BaseModel):
+    """GET /tools レスポンス"""
+
+    tools: list[ToolInfo] = Field(default_factory=list)
+    sources: dict[str, ToolSourceInfo] = Field(default_factory=dict)
+
+
+# --- GET /health ---
+
+
 class HealthResponse(BaseModel):
     """GET /health レスポンス"""
 
