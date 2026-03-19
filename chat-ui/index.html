@@ -2807,6 +2807,14 @@
           }
         }
 
+        // ブランチレベル計算（編集ごとにレベルを上げ、横にオフセット）
+        const entityBranch = {};
+        let currentBranch = 0;
+        for (const e of entities) {
+          if (revisionTargets.has(e.id)) currentBranch++;
+          entityBranch[e.id] = currentBranch;
+        }
+
         if (cyInstance) cyInstance.destroy();
 
         cyInstance = cytoscape({
@@ -2843,7 +2851,9 @@
                 'color': '#6b7f6e',
                 'text-rotation': 'autorotate',
                 'text-margin-y': -8,
-                'curve-style': 'bezier',
+                'curve-style': 'taxi',
+                'taxi-direction': 'downward',
+                'taxi-turn': '50px',
                 'target-arrow-shape': 'triangle',
                 'target-arrow-color': '#b8d4bb',
                 'line-color': '#b8d4bb',
@@ -2869,13 +2879,14 @@
           layout: {
             name: 'preset',
             positions: (node) => {
-              // 時系列順に上から下へ配置
               const idx = entities.findIndex(e => e.id === node.id());
               if (idx < 0) return { x: 0, y: 0 };
               const e = entities[idx];
               const isUser = e.prov_type === 'user_message';
-              // ユーザーを右、AI を左に配置（チャット UI と同じ）
-              const x = isUser ? 250 : -250;
+              const branch = entityBranch[e.id] || 0;
+              // ブランチごとに右にオフセット（編集分岐を横に展開）
+              const baseX = isUser ? 200 : -200;
+              const x = baseX + branch * 350;
               const y = idx * 100;
               return { x, y };
             },
