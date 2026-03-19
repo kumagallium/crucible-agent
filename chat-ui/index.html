@@ -403,8 +403,9 @@
     .revision-nav {
       display: flex;
       align-items: center;
+      justify-content: flex-end;
       gap: 4px;
-      margin-top: 2px;
+      margin: 2px 0 4px;
       font-size: 12px;
       color: var(--muted-foreground);
     }
@@ -1681,9 +1682,9 @@
       nav.appendChild(nextBtn);
       updateNav();
 
-      // messagesEl にナビ → 各ブランチ div を追加
-      messagesEl.appendChild(nav);
+      // 各ブランチ div → ナビの順で追加（ナビはユーザーメッセージ群の直下に表示）
       branchDivs.forEach(div => messagesEl.appendChild(div));
+      messagesEl.appendChild(nav);
       scrollToBottom();
     }
 
@@ -2467,10 +2468,12 @@
       nav.appendChild(nextBtn);
       updateNav();
 
-      // 最新版のユーザー wrapper の後にナビを挿入
-      const latestUserWrapper = chain[activeIdx].userWrapper;
-      if (latestUserWrapper && latestUserWrapper.parentNode) {
-        latestUserWrapper.parentNode.insertBefore(nav, latestUserWrapper.nextSibling);
+      // 最新版のエージェント wrapper の後（または ユーザー wrapper の後）にナビを挿入
+      const latestAgent = chain[activeIdx].agentWrapper;
+      const latestUser = chain[activeIdx].userWrapper;
+      const insertAfter = latestAgent || latestUser;
+      if (insertAfter && insertAfter.parentNode) {
+        insertAfter.parentNode.insertBefore(nav, insertAfter.nextSibling);
       }
     }
 
