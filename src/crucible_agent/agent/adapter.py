@@ -252,21 +252,35 @@ async def run_stream(
     require_approval: bool = False,
     approval_callback: ApprovalCallback | None = None,
     max_turns: int = 10,
+    conversation_history: list[dict] | None = None,
 ) -> AsyncIterator[StreamEvent]:
-    """エージェントを実行し、イベントをストリームする"""
+    """エージェントを実行し、イベントをストリームする
+
+    Args:
+        conversation_history: 明示的な会話履歴（指定時は DB からの復元をスキップ）
+    """
     servers = discovered_servers or []
 
     async with AsyncExitStack() as stack:
         sessions, tools = await _connect_servers(servers, stack)
 
-        # 過去の会話履歴を復元
-        history: list[dict] = []
-        if session_id:
-            from crucible_agent.provenance.recorder import get_conversation_history
-            try:
-                history = await get_conversation_history(session_id)
-            except Exception:
-                logger.warning("会話履歴の読み込みに失敗しました (session=%s)", session_id)
+        # 過去の会話履歴を復元（明示的に渡された場合はそれを使用）
+        if conversation_history is not None:
+            history = conversation_history
+        else:
+            history = []
+            if session_id:
+                from crucible_agent.provenance.recorder import (
+                    get_conversation_history,
+                )
+
+                try:
+                    history = await get_conversation_history(session_id)
+                except Exception:
+                    logger.warning(
+                        "会話履歴の読み込みに失敗しました (session=%s)",
+                        session_id,
+                    )
 
         messages = [
             {"role": "system", "content": instruction},

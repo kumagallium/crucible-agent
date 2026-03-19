@@ -397,6 +397,15 @@ async def agent_ws(websocket: WebSocket, session_id: str | None = None) -> None:
                 server_names = msg.get("server_names")
                 require_approval = msg.get("require_approval", False)
                 context_ids: list[str] = msg.get("context_ids") or []
+                edit_from_entity_id: str | None = msg.get("edit_from_entity_id")
+
+                # 編集モード: 指定 Entity 時点までの履歴のみ使用
+                conversation_history: list[dict] | None = None
+                if edit_from_entity_id:
+                    conversation_history = await get_conversation_history_until(
+                        session_id=session_id,
+                        until_entity_id=edit_from_entity_id,
+                    )
 
                 # ストリーム中のテキストとツール呼び出しを収集
                 collected_text = ""
@@ -411,6 +420,7 @@ async def agent_ws(websocket: WebSocket, session_id: str | None = None) -> None:
                     context_ids=context_ids or None,
                     require_approval=require_approval,
                     approval_callback=approval_callback if require_approval else None,
+                    conversation_history=conversation_history,
                 ):
                     # 収集
                     if event.type == "text_delta":

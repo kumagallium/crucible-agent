@@ -6,7 +6,6 @@
   <title>Crucible Agent</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
   <style>
     :root {
       /* Crucible Design System */
@@ -1369,20 +1368,20 @@
 
   </div>
 
-  <!-- ===== 分岐モーダル ===== -->
+  <!-- ===== 編集モーダル ===== -->
   <div id="branch-modal-overlay">
     <div id="branch-modal">
       <div class="bm-header">
-        <h3>⑂ セッションを分岐</h3>
+        <h3>メッセージを編集して再送</h3>
         <button class="bm-close" id="branch-modal-close">✕</button>
       </div>
       <div class="bm-body">
-        <p class="bm-hint">この返答の時点から新しいセッションを開始します。以降の会話は元のセッションに影響しません。</p>
-        <textarea id="branch-input" placeholder="分岐後の最初のメッセージを入力..."></textarea>
+        <p class="bm-hint">この時点から会話をやり直します。以降のメッセージは置き換えられます。</p>
+        <textarea id="branch-input" placeholder="メッセージを編集..."></textarea>
       </div>
       <div class="bm-footer">
         <button class="bm-cancel-btn" id="branch-cancel-btn">キャンセル</button>
-        <button class="bm-confirm-btn" id="branch-confirm-btn">分岐して開始</button>
+        <button class="bm-confirm-btn" id="branch-confirm-btn">再送する</button>
       </div>
     </div>
   </div>
@@ -1424,6 +1423,14 @@
     let firstUserMessage = null; // 現セッションの最初のユーザーメッセージ（タイトル生成用）
     let manualDisconnect = false; // セッション切り替え時の自動再接続を抑制
     let suppressConnectMsg = false; // 過去セッション復元時の接続メッセージを抑制
+
+    // ===== Lucide SVG アイコン（インライン） =====
+    const SVG_ATTRS = 'xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"';
+    const ICON = {
+      quoteNew: `<svg ${SVG_ATTRS}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><line x1="9" x2="15" y1="10" y2="10"/><line x1="12" x2="12" y1="7" y2="13"/></svg>`,
+      copy:     `<svg ${SVG_ATTRS}><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>`,
+      branch:   `<svg ${SVG_ATTRS}><line x1="6" x2="6" y1="3" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>`,
+    };
 
     // ===== 引用・分岐 状態管理 =====
     let pendingContextIds = [];   // [{ entityId, content }]
@@ -1791,17 +1798,16 @@
       if (cls === 'user' || cls === 'agent') {
         const actions = document.createElement('div');
         actions.className = 'msg-actions';
-        if (cls === 'agent') {
+        if (cls === 'user') {
           actions.innerHTML =
-            `<button class="msg-action-btn" data-action="quote" data-tooltip="新規セッションに引用"><i data-lucide="message-square-plus"></i></button>` +
-            `<button class="msg-action-btn" data-action="copy" data-tooltip="別セッションにコピー"><i data-lucide="copy"></i></button>` +
-            `<button class="msg-action-btn" data-action="branch" data-tooltip="ここから分岐"><i data-lucide="git-branch"></i></button>`;
+            `<button class="msg-action-btn" data-action="quote" data-tooltip="新規セッションに引用">${ICON.quoteNew}</button>` +
+            `<button class="msg-action-btn" data-action="copy" data-tooltip="別セッションにコピー">${ICON.copy}</button>` +
+            `<button class="msg-action-btn" data-action="branch" data-tooltip="ここから別の聞き方で分岐">${ICON.branch}</button>`;
         } else {
           actions.innerHTML =
-            `<button class="msg-action-btn" data-action="quote" data-tooltip="新規セッションに引用"><i data-lucide="message-square-plus"></i></button>` +
-            `<button class="msg-action-btn" data-action="copy" data-tooltip="別セッションにコピー"><i data-lucide="copy"></i></button>`;
+            `<button class="msg-action-btn" data-action="quote" data-tooltip="新規セッションに引用">${ICON.quoteNew}</button>` +
+            `<button class="msg-action-btn" data-action="copy" data-tooltip="別セッションにコピー">${ICON.copy}</button>`;
         }
-        lucide.createIcons({ el: actions });
         wrapper.appendChild(actions);
 
         wrapper.addEventListener('mouseenter', () => {
@@ -1819,7 +1825,7 @@
             const action = btn.dataset.action;
             if (action === 'quote') quoteToNewSession(entityId, content);
             else if (action === 'copy') copyEntityRef(entityId, content);
-            else if (action === 'branch') openBranchModal(entityId);
+            else if (action === 'branch') openBranchModal(entityId, content);
           });
         });
       }
@@ -2259,12 +2265,18 @@
       pasteBannerEl.classList.remove('visible');
     });
 
-    // --- 分岐モーダル ---
-    function openBranchModal(entityId) {
+    // --- 編集モーダル ---
+    let branchOriginalText = '';
+
+    function openBranchModal(entityId, originalText) {
       branchEntityId = entityId;
-      branchInputEl.value = '';
+      branchOriginalText = originalText || '';
+      branchInputEl.value = branchOriginalText;
       branchModalOverlay.classList.add('open');
-      setTimeout(() => branchInputEl.focus(), 100);
+      setTimeout(() => {
+        branchInputEl.focus();
+        branchInputEl.setSelectionRange(branchInputEl.value.length, branchInputEl.value.length);
+      }, 100);
     }
 
     function closeBranchModal() {
@@ -2278,42 +2290,53 @@
       if (e.target === branchModalOverlay) closeBranchModal();
     });
 
-    branchConfirmBtn.addEventListener('click', async () => {
+    branchConfirmBtn.addEventListener('click', () => {
       const msg = branchInputEl.value.trim();
       if (!msg || !branchEntityId) return;
-
-      branchConfirmBtn.disabled = true;
-      branchConfirmBtn.textContent = '分岐中...';
-
-      try {
-        const parentSessionId = wsSessionId;
-        const resp = await fetch(`/sessions/${parentSessionId}/branch`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            branch_from_entity_id: branchEntityId,
-            message: msg,
-          }),
-        });
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        const data = await resp.json();
-        closeBranchModal();
-        // 新セッションに切り替え（分岐結果を表示）
-        await switchSession(data.session_id);
-        // 分岐応答を表示
-        if (data.message) {
-          const agentEl = addMsg('', 'agent');
-          agentEl._rawText = data.message;
-          agentEl.innerHTML = renderMarkdown(data.message);
-          if (data.provenance_id) agentEl._wrapper.dataset.entityId = data.provenance_id;
-        }
-        showToast('⑂ セッションを分岐しました。');
-      } catch (err) {
-        showToast('分岐に失敗しました: ' + err.message);
-      } finally {
-        branchConfirmBtn.disabled = false;
-        branchConfirmBtn.textContent = '分岐して開始';
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        showToast('接続されていません');
+        return;
       }
+
+      // 編集元メッセージ以降の UI をクリア
+      const editWrapper = messagesEl.querySelector(
+        `.msg-wrapper[data-entity-id="${CSS.escape(branchEntityId)}"]`
+      );
+      if (editWrapper) {
+        // 編集元自身も含め、それ以降を全て削除
+        while (editWrapper.nextSibling) {
+          editWrapper.nextSibling.remove();
+        }
+        editWrapper.remove();
+      }
+
+      closeBranchModal();
+
+      // 編集後のメッセージを表示
+      const userEl = addMsg(msg, 'user');
+      lastUserWrapper = userEl._wrapper;
+      lastAgentWrapper = null;
+
+      // edit_from_entity_id 付きで WS 送信
+      const payload = {
+        type: 'message',
+        content: msg,
+        edit_from_entity_id: branchEntityId,
+      };
+      if (profileEl.value) payload.profile = profileEl.value;
+      if (customInstrEl.value.trim()) payload.custom_instructions = customInstrEl.value.trim();
+      const enabled = getEnabledTools();
+      if (enabled.length < Object.keys(toolStates).length) {
+        payload.server_names = enabled;
+      }
+      if (planMode) payload.require_approval = true;
+      ws.send(JSON.stringify(payload));
+
+      sendBtn.disabled = true;
+      inputEl.disabled = true;
+      currentAgentMsg = null;
+      addSystemMsg('考え中...');
+      showToast('メッセージを編集して再送しました。');
     });
 
     // --- イベント ---

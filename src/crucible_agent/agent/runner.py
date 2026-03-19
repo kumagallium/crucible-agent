@@ -115,6 +115,7 @@ async def run_agent_stream(
     context_ids: list[str] | None = None,
     require_approval: bool = False,
     approval_callback: ApprovalCallback | None = None,
+    conversation_history: list[dict] | None = None,
 ) -> AsyncIterator[StreamEvent]:
     """エージェントを実行し、イベントをストリームする（WebSocket 用）"""
     instruction = instruction or await _build_instruction_with_contexts(
@@ -132,6 +133,7 @@ async def run_agent_stream(
         session_id=session_id,
         require_approval=require_approval,
         approval_callback=approval_callback,
+        conversation_history=conversation_history,
     ):
         yield event
 
