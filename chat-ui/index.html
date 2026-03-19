@@ -349,14 +349,19 @@
     .msg-wrapper-agent { align-items: flex-start; }
 
     .msg-actions {
-      display: none;
+      display: flex;
+      visibility: hidden;
       gap: 2px;
       padding: 2px 4px;
       background: var(--card);
-      border: 1px solid var(--border);
+      border: 1px solid transparent;
       border-radius: var(--radius-full);
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
       margin-top: 3px;
+    }
+    .msg-wrapper[data-entity-id]:hover .msg-actions {
+      visibility: visible;
+      border-color: var(--border);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     }
 
     .msg-action-btn {
@@ -1951,13 +1956,6 @@
             `<button class="msg-action-btn" data-action="copy" data-tooltip="別セッションにコピー">${ICON.copy}</button>`;
         }
         wrapper.appendChild(actions);
-
-        wrapper.addEventListener('mouseenter', () => {
-          if (wrapper.dataset.entityId) actions.style.display = 'flex';
-        });
-        wrapper.addEventListener('mouseleave', () => {
-          actions.style.display = 'none';
-        });
 
         actions.querySelectorAll('.msg-action-btn').forEach(btn => {
           btn.addEventListener('click', () => {
