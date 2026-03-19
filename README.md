@@ -109,4 +109,4 @@ See [docs/roadmap.md](docs/roadmap.md) for the phased implementation plan.
 
 ## License
 
-[Apache-2.0](LICENSE)
+[MIT](LICENSE)
