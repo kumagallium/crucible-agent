@@ -2687,13 +2687,10 @@
     }
 
     function provLabel(node) {
-      if (node.node_type === 'entity') {
-        const content = node.content || '';
-        if (content.length > 40) return content.slice(0, 37) + '...';
-        return content || node.prov_type;
-      }
+      // label はバックエンドがコンテンツ先頭40文字をセット済み
+      if (node.node_type === 'entity') return node.label || node.prov_type;
       if (node.node_type === 'agent') return node.label || 'Agent';
-      return node.prov_type || 'activity';
+      return node.label || node.prov_type || 'activity';
     }
 
     function provShape(node) {
@@ -2713,7 +2710,18 @@
 
         const elements = [];
 
+        // Agent ノードを type+label で統合（同じ LLM を 1 ノードに）
+        const agentMergeMap = {};  // old_id → canonical_id
+        const agentKeyMap = {};    // "type:label" → canonical node
         for (const n of data.nodes) {
+          if (n.node_type === 'agent') {
+            const key = `${n.prov_type}:${n.label}`;
+            if (agentKeyMap[key]) {
+              agentMergeMap[n.id] = agentKeyMap[key].id;
+              continue;  // 重複を除外
+            }
+            agentKeyMap[key] = n;
+          }
           const c = provColor(n);
           elements.push({
             data: {
@@ -2728,11 +2736,15 @@
         }
 
         for (const e of data.edges) {
+          // 統合された Agent ノードに参照を置き換え
+          const source = agentMergeMap[e.source] || e.source;
+          const target = agentMergeMap[e.target] || e.target;
+          const edgeId = source + '-' + target + '-' + e.relation;
           elements.push({
             data: {
-              id: e.source + '-' + e.target + '-' + e.relation,
-              source: e.source,
-              target: e.target,
+              id: edgeId,
+              source,
+              target,
               label: e.relation,
             },
           });
