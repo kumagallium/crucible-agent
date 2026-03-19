@@ -327,4 +327,5 @@ class TestAgentRunEndpoint:
             profile="science",
             custom_instructions="Be concise",
             server_names=None,
+            context_ids=None,
         )
