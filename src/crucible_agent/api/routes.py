@@ -87,6 +87,45 @@ async def health() -> HealthResponse:
     return HealthResponse(status=status, components=components, version=__version__)
 
 
+@router.get("/models")
+async def models() -> dict:
+    """LiteLLM に登録されたモデル一覧を返す"""
+    try:
+        headers = {"Authorization": f"Bearer {settings.litellm_api_key}"}
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get(
+                f"{settings.litellm_api_base}/model/info",
+                headers=headers,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+
+        model_list = []
+        for m in data.get("data", []):
+            model_name = m.get("model_name", "")
+            model_info = m.get("model_info", {})
+            litellm_params = m.get("litellm_params", {})
+            model_list.append({
+                "id": model_name,
+                "name": model_name,
+                "provider": litellm_params.get("model", "").split("/")[0] if "/" in litellm_params.get("model", "") else "unknown",
+                "model_id": litellm_params.get("model", ""),
+                "supports_function_calling": litellm_params.get("supports_function_calling", False),
+            })
+
+        return {
+            "models": model_list,
+            "default": settings.llm_model,
+        }
+    except Exception:
+        logger.warning("Failed to fetch models from LiteLLM", exc_info=True)
+        # フォールバック: デフォルトモデルのみ返す
+        return {
+            "models": [{"id": settings.llm_model, "name": settings.llm_model, "provider": "unknown", "model_id": "", "supports_function_calling": True}],
+            "default": settings.llm_model,
+        }
+
+
 @router.get("/tools", response_model=ToolsResponse)
 async def tools() -> ToolsResponse:
     """Crucible から検出した利用可能ツール一覧を返す"""
@@ -185,6 +224,7 @@ async def agent_run(req: AgentRunRequest) -> AgentRunResponse:
         custom_instructions=req.custom_instructions,
         server_names=req.server_names,
         context_ids=req.context_ids or None,
+        model=req.options.model,
     )
 
     # PROV-DM 来歴記録
@@ -408,6 +448,7 @@ async def agent_ws(websocket: WebSocket, session_id: str | None = None) -> None:
                 require_approval = msg.get("require_approval", False)
                 context_ids: list[str] = msg.get("context_ids") or []
                 edit_from_entity_id: str | None = msg.get("edit_from_entity_id")
+                model: str | None = msg.get("model")
 
                 # 編集モード: 指定 Entity 時点までの履歴のみ使用
                 conversation_history: list[dict] | None = None
@@ -431,6 +472,7 @@ async def agent_ws(websocket: WebSocket, session_id: str | None = None) -> None:
                     require_approval=require_approval,
                     approval_callback=approval_callback if require_approval else None,
                     conversation_history=conversation_history,
+                    model=model,
                 ):
                     # 収集
                     if event.type == "text_delta":

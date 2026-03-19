@@ -130,10 +130,11 @@ async def _call_tool(
 async def _call_llm(
     messages: list[dict],
     tools: list[dict] | None = None,
+    model: str | None = None,
 ) -> dict:
     """LiteLLM Proxy に chat completions リクエストを送る"""
     payload: dict[str, Any] = {
-        "model": settings.llm_model,
+        "model": model or settings.llm_model,
         "messages": messages,
     }
     if tools:
@@ -165,6 +166,7 @@ async def run(
     discovered_servers: list[DiscoveredServer] | None = None,
     session_id: str | None = None,
     max_turns: int = 10,
+    model: str | None = None,
 ) -> AdapterResult:
     """エージェントを実行する（同期版）"""
     servers = discovered_servers or []
@@ -191,7 +193,7 @@ async def run(
         total_usage = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
 
         for turn in range(max_turns):
-            resp = await _call_llm(messages, tools if tools else None)
+            resp = await _call_llm(messages, tools if tools else None, model=model)
 
             usage = resp.get("usage", {})
             total_usage["input_tokens"] += usage.get("prompt_tokens", 0)
@@ -253,6 +255,7 @@ async def run_stream(
     approval_callback: ApprovalCallback | None = None,
     max_turns: int = 10,
     conversation_history: list[dict] | None = None,
+    model: str | None = None,
 ) -> AsyncIterator[StreamEvent]:
     """エージェントを実行し、イベントをストリームする
 
@@ -292,7 +295,7 @@ async def run_stream(
 
         try:
             for turn in range(max_turns):
-                resp = await _call_llm(messages, tools if tools else None)
+                resp = await _call_llm(messages, tools if tools else None, model=model)
 
                 usage = resp.get("usage", {})
                 total_usage["input_tokens"] += usage.get("prompt_tokens", 0)

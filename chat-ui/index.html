@@ -1574,6 +1574,16 @@
       <div class="rp-body" id="health-list">読み込み中...</div>
     </details>
 
+    <!-- モデル選択 -->
+    <div class="rp-section">
+      <div class="rp-title">Model</div>
+      <div class="rp-body">
+        <select id="model-select">
+          <option value="">読み込み中...</option>
+        </select>
+      </div>
+    </div>
+
     <!-- プロファイル設定 -->
     <div class="rp-section">
       <div class="profile-title-row">
@@ -1653,6 +1663,7 @@
     const sendBtn = document.getElementById('send');
     const statusEl = document.getElementById('status');
     const profileEl = document.getElementById('profile');
+    const modelSelectEl = document.getElementById('model-select');
     const customInstrEl = document.getElementById('custom-instructions');
     const healthListEl = document.getElementById('health-list');
     const toolListEl = document.getElementById('tool-list');
@@ -2053,6 +2064,27 @@
         .catch(() => { healthListEl.textContent = '取得失敗'; });
     }
 
+    function loadModels() {
+      fetch('/models')
+        .then(r => r.json())
+        .then(data => {
+          const currentVal = modelSelectEl.value;
+          modelSelectEl.innerHTML = '';
+          const defaultModel = data.default || '';
+          (data.models || []).forEach(m => {
+            const opt = document.createElement('option');
+            opt.value = m.id;
+            opt.textContent = m.name + (m.provider !== 'unknown' ? ` (${m.provider})` : '');
+            if (m.id === defaultModel) opt.selected = true;
+            modelSelectEl.appendChild(opt);
+          });
+          if (currentVal) modelSelectEl.value = currentVal;
+        })
+        .catch(() => {
+          modelSelectEl.innerHTML = '<option value="">取得失敗</option>';
+        });
+    }
+
     function loadProfiles() {
       const currentVal = profileEl.value;
       // デフォルト option だけ残してクリア
@@ -2237,6 +2269,7 @@
 
       const payload = { type: 'message', content: text };
       if (profileEl.value) payload.profile = profileEl.value;
+      if (modelSelectEl.value) payload.model = modelSelectEl.value;
       if (customInstrEl.value.trim()) payload.custom_instructions = customInstrEl.value.trim();
       const enabled = getEnabledTools();
       if (enabled.length < Object.keys(toolStates).length) {
@@ -2869,6 +2902,7 @@
         edit_from_entity_id: editEntityId,
       };
       if (profileEl.value) payload.profile = profileEl.value;
+      if (modelSelectEl.value) payload.model = modelSelectEl.value;
       if (customInstrEl.value.trim()) payload.custom_instructions = customInstrEl.value.trim();
       const enabled = getEnabledTools();
       if (enabled.length < Object.keys(toolStates).length) {
@@ -3228,6 +3262,7 @@
 
     // --- 初期化 ---
     loadHealth();
+    loadModels();
     loadProfiles();
     loadTools();
     connect();

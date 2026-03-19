@@ -336,4 +336,5 @@ class TestAgentRunEndpoint:
             custom_instructions="Be concise",
             server_names=None,
             context_ids=None,
+            model=None,
         )

@@ -11,7 +11,42 @@ model_list:
       supports_function_calling: true
       merge_reasoning_content_in_choices: true
 
-  # Ollama（ローカル開発用、オプション）
+  # --- 以下はオプション: 使用するプロバイダーのコメントを外して .env に API キーを設定 ---
+
+  # OpenAI
+  # - model_name: gpt-4o
+  #   litellm_params:
+  #     model: gpt-4o
+  #     api_key: os.environ/OPENAI_API_KEY
+  #     supports_function_calling: true
+
+  # - model_name: gpt-4o-mini
+  #   litellm_params:
+  #     model: gpt-4o-mini
+  #     api_key: os.environ/OPENAI_API_KEY
+  #     supports_function_calling: true
+
+  # Anthropic Claude
+  # - model_name: claude-sonnet
+  #   litellm_params:
+  #     model: anthropic/claude-sonnet-4-20250514
+  #     api_key: os.environ/ANTHROPIC_API_KEY
+  #     supports_function_calling: true
+
+  # - model_name: claude-haiku
+  #   litellm_params:
+  #     model: anthropic/claude-haiku-4-5-20251001
+  #     api_key: os.environ/ANTHROPIC_API_KEY
+  #     supports_function_calling: true
+
+  # Google Gemini
+  # - model_name: gemini-pro
+  #   litellm_params:
+  #     model: gemini/gemini-2.5-pro-preview-06-05
+  #     api_key: os.environ/GEMINI_API_KEY
+  #     supports_function_calling: true
+
+  # Ollama（ローカル開発用）
   # - model_name: ollama-local
   #   litellm_params:
   #     model: ollama/llama3.2

@@ -80,6 +80,7 @@ async def run_agent(
     profile: str | None = None,
     custom_instructions: str | None = None,
     context_ids: list[str] | None = None,
+    model: str | None = None,
 ) -> dict:
     """エージェントを実行して結果を返す（同期版）"""
     session_id = session_id or str(uuid.uuid4())
@@ -97,6 +98,7 @@ async def run_agent(
         server_names=server_names,
         discovered_servers=discovered,
         session_id=session_id,
+        model=model,
     )
 
     logger.info("Agent run completed (session=%s)", session_id)
@@ -121,6 +123,7 @@ async def run_agent_stream(
     require_approval: bool = False,
     approval_callback: ApprovalCallback | None = None,
     conversation_history: list[dict] | None = None,
+    model: str | None = None,
 ) -> AsyncIterator[StreamEvent]:
     """エージェントを実行し、イベントをストリームする（WebSocket 用）"""
     instruction = instruction or await _build_instruction_with_contexts(
@@ -144,6 +147,7 @@ async def run_agent_stream(
         require_approval=require_approval,
         approval_callback=approval_callback,
         conversation_history=conversation_history,
+        model=model,
     ):
         yield event
 
