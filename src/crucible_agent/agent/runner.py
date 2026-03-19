@@ -10,7 +10,11 @@ from crucible_agent.agent.adapter import (
     AdapterResult,
     ApprovalCallback,
     StreamEvent,
+)
+from crucible_agent.agent.adapter import (
     run as adapter_run,
+)
+from crucible_agent.agent.adapter import (
     run_stream as adapter_run_stream,
 )
 from crucible_agent.crucible.discovery import DiscoveredServer, discover_servers
@@ -38,6 +42,31 @@ async def _resolve_servers(
     return names, discovered
 
 
+async def _build_instruction_with_contexts(
+    profile: str | None,
+    custom_instructions: str | None,
+    context_ids: list[str],
+) -> str:
+    """context_ids の Entity 内容をシステムプロンプトに注入した instruction を構築する"""
+    from crucible_agent.provenance.recorder import get_entity
+
+    base = await build_instruction(profile, custom_instructions)
+    if not context_ids:
+        return base
+
+    context_blocks: list[str] = []
+    for entity_id in context_ids:
+        entity = await get_entity(entity_id)
+        if entity and entity.content:
+            context_blocks.append(f"[引用: {entity_id[:8]}...]\n{entity.content}")
+
+    if not context_blocks:
+        return base
+
+    injected = "\n\n---\n".join(context_blocks)
+    return f"{base}\n\n## 参照文脈（手動引用）\n\n{injected}"
+
+
 async def run_agent(
     message: str,
     session_id: str | None = None,
@@ -45,10 +74,14 @@ async def run_agent(
     server_names: list[str] | None = None,
     profile: str | None = None,
     custom_instructions: str | None = None,
+    context_ids: list[str] | None = None,
 ) -> dict:
     """エージェントを実行して結果を返す（同期版）"""
     session_id = session_id or str(uuid.uuid4())
-    instruction = instruction or await build_instruction(profile, custom_instructions)
+    if instruction is None:
+        instruction = await _build_instruction_with_contexts(
+            profile, custom_instructions, context_ids or []
+        )
     server_names, discovered = await _resolve_servers(server_names)
 
     logger.info("Agent run started (session=%s)", session_id)
@@ -68,6 +101,7 @@ async def run_agent(
         "message": result.message,
         "tool_calls": result.tool_calls,
         "token_usage": result.token_usage,
+        "context_ids": context_ids or [],
     }
 
 

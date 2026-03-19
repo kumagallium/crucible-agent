@@ -16,6 +16,9 @@ from crucible_agent.agent.runner import run_agent, run_agent_stream
 from crucible_agent.api.schemas import (
     AgentRunRequest,
     AgentRunResponse,
+    BranchRequest,
+    BranchResponse,
+    EntityResponse,
     HealthResponse,
     ProfileCreate,
     ProfileInfo,
@@ -36,7 +39,14 @@ from crucible_agent.profiles.repository import (
     list_profiles,
     update_profile,
 )
-from crucible_agent.provenance.recorder import get_session_history, list_sessions, record_agent_run
+from crucible_agent.provenance.recorder import (
+    get_conversation_history_until,
+    get_entity,
+    get_session_history,
+    list_sessions,
+    record_agent_run,
+    record_branch_run,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -170,6 +180,7 @@ async def agent_run(req: AgentRunRequest) -> AgentRunResponse:
         profile=req.profile,
         custom_instructions=req.custom_instructions,
         server_names=req.server_names,
+        context_ids=req.context_ids or None,
     )
 
     # PROV-DM 来歴記録
@@ -180,6 +191,7 @@ async def agent_run(req: AgentRunRequest) -> AgentRunResponse:
             user_message=req.message,
             agent_response=result["message"],
             tool_calls=result.get("tool_calls", []),
+            context_ids=result.get("context_ids") or None,
         )
     except Exception:
         logger.warning("Provenance recording failed", exc_info=True)
@@ -234,6 +246,73 @@ async def generate_session_title(req: _SessionTitleRequest) -> dict:
         logger.warning("Title generation failed", exc_info=True)
         short = req.first_message.strip()[:25]
         return {"title": short + ("..." if len(req.first_message.strip()) > 25 else "")}
+
+
+@router.get("/entities/{entity_id}", response_model=EntityResponse)
+async def entity_get(entity_id: str) -> EntityResponse:
+    """Entity を取得する（引用カード描画用）"""
+    entity = await get_entity(entity_id)
+    if entity is None:
+        raise HTTPException(status_code=404, detail="Entity not found")
+    return EntityResponse(
+        id=entity.id,
+        session_id=entity.session_id,
+        type=entity.type,
+        content=entity.content,
+        created_at=entity.created_at.isoformat(),
+    )
+
+
+@router.post("/sessions/{session_id}/branch", response_model=BranchResponse)
+async def session_branch(session_id: str, req: BranchRequest) -> BranchResponse:
+    """セッションを指定 Entity で分岐し、新セッションでエージェントを実行する"""
+    # 分岐元の履歴を分岐点 Entity まで取得
+    history = await get_conversation_history_until(
+        session_id=session_id,
+        until_entity_id=req.branch_from_entity_id,
+    )
+    if not history:
+        raise HTTPException(status_code=404, detail="Branch entity not found in session")
+
+    branch_session_id = str(uuid.uuid4())
+
+    # 履歴を instruction に追加して新セッションでエージェントを実行
+    # history を「前の会話」として adapter に渡すため custom_instructions に埋め込む
+    history_text = "\n".join(
+        f"{'User' if m['role'] == 'user' else 'Assistant'}: {m['content']}"
+        for m in history
+    )
+    custom_instructions = f"## 引き継いだ会話履歴\n\n{history_text}"
+
+    result = await run_agent(
+        message=req.message,
+        session_id=branch_session_id,
+        profile=req.profile,
+        custom_instructions=custom_instructions,
+    )
+
+    # PROV-DM 記録（wasDerivedFrom を含む）
+    provenance_id = None
+    try:
+        provenance_id = await record_branch_run(
+            parent_session_id=session_id,
+            branch_session_id=branch_session_id,
+            branch_from_entity_id=req.branch_from_entity_id,
+            user_message=req.message,
+            agent_response=result["message"],
+            tool_calls=result.get("tool_calls", []),
+        )
+    except Exception:
+        logger.warning("Branch provenance recording failed", exc_info=True)
+
+    return BranchResponse(
+        session_id=branch_session_id,
+        branched_from_session_id=session_id,
+        branched_from_entity_id=req.branch_from_entity_id,
+        message=result["message"],
+        provenance_id=provenance_id,
+        token_usage=TokenUsage(**result.get("token_usage", {})),
+    )
 
 
 @router.get("/provenance")

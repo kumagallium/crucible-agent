@@ -93,6 +93,24 @@ class ProvenanceUsage(Base):
     entity: Mapped[ProvenanceEntity] = relationship()
 
 
+class ProvenanceDerivation(Base):
+    """prov:wasDerivedFrom — Entity 間の派生・影響関係（セッション横断可）"""
+
+    __tablename__ = "prov_derivations"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    derived_entity_id: Mapped[str] = mapped_column(ForeignKey("prov_entities.id", ondelete="CASCADE"))
+    source_entity_id: Mapped[str] = mapped_column(ForeignKey("prov_entities.id", ondelete="CASCADE"))
+    # "wasDerivedFrom": 直接派生 / "wasInfluencedBy": 手動引用 / "wasRevisionOf": 改訂
+    relation_type: Mapped[str] = mapped_column(String(50), default="wasDerivedFrom")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
+
+    derived_entity: Mapped[ProvenanceEntity] = relationship(foreign_keys=[derived_entity_id])
+    source_entity: Mapped[ProvenanceEntity] = relationship(foreign_keys=[source_entity_id])
+
+
 class Profile(Base):
     """ユーザー定義プロンプトプロファイル"""
 

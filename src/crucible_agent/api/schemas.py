@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-
 # --- POST /agent/run ---
 
 
@@ -25,6 +24,10 @@ class AgentRunRequest(BaseModel):
     custom_instructions: str | None = Field(default=None, description="カスタム指示（プロファイルに追加）")
     server_names: list[str] | None = Field(default=None, description="使用するツール名リスト（省略時は全ツール）")
     options: AgentRunOptions = Field(default_factory=AgentRunOptions)
+    context_ids: list[str] = Field(
+        default_factory=list,
+        description="注入する過去 Entity の ID リスト（手動ブロック引用）",
+    )
 
 
 class ToolCallRecord(BaseModel):
@@ -101,6 +104,44 @@ class ProfilesResponse(BaseModel):
     """GET /profiles レスポンス"""
 
     profiles: list[ProfileInfo] = Field(default_factory=list)
+
+
+# --- GET /entities ---
+
+
+class EntityResponse(BaseModel):
+    """GET /entities/{entity_id} レスポンス（引用カード描画用）"""
+
+    id: str
+    session_id: str
+    type: str
+    content: str | None
+    created_at: str
+
+
+# --- POST /sessions/{session_id}/branch ---
+
+
+class BranchRequest(BaseModel):
+    """POST /sessions/{session_id}/branch リクエスト"""
+
+    branch_from_entity_id: str = Field(
+        ..., description="どの agent_response Entity まで履歴を引き継ぐか"
+    )
+    message: str = Field(..., description="分岐後の最初のユーザーメッセージ")
+    profile: str | None = Field(default=None, description="プロンプトプロファイル名")
+    options: AgentRunOptions = Field(default_factory=AgentRunOptions)
+
+
+class BranchResponse(BaseModel):
+    """POST /sessions/{session_id}/branch レスポンス"""
+
+    session_id: str
+    branched_from_session_id: str
+    branched_from_entity_id: str
+    message: str
+    provenance_id: str | None = None
+    token_usage: TokenUsage = Field(default_factory=TokenUsage)
 
 
 # --- GET /tools ---
