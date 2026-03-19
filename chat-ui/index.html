@@ -1569,111 +1569,90 @@
     }
 
     async function loadSessionMessages(sid) {
-      const items = await fetch(`/provenance/${sid}`).then(r => r.json());
+      const items = (await fetch(`/provenance/${sid}`).then(r => r.json()))
+        .filter(i => i.type === 'agent_run');
 
-      // 編集グループの構築: original_entity_id → [item, ...]（時系列順）
-      // revision_of があるアイテムは、元メッセージのグループに属する
-      const entityToItem = {};        // user_entity_id → item
-      const revisionGroups = {};      // original_entity_id → [item, item, ...]
-      const isRevision = new Set();   // revision のアイテム id
+      if (items.length === 0) return;
 
-      for (const item of items) {
-        if (item.type !== 'agent_run') continue;
-        if (item.user_entity_id) entityToItem[item.user_entity_id] = item;
-      }
+      // entity → index マップ
+      const entityToIdx = {};
+      items.forEach((item, i) => {
+        if (item.user_entity_id) entityToIdx[item.user_entity_id] = i;
+      });
 
-      // revision_of チェーンを辿って、最も古いオリジナルを見つける
-      function findRoot(entityId) {
-        const item = entityToItem[entityId];
-        if (!item) return entityId;
-        if (item.revision_of && entityToItem[item.revision_of]) {
-          return findRoot(item.revision_of);
-        }
-        return entityId;
-      }
-
-      for (const item of items) {
-        if (item.type !== 'agent_run' || !item.user_entity_id) continue;
-        if (item.revision_of) {
-          const rootId = findRoot(item.user_entity_id);
-          if (!revisionGroups[rootId]) revisionGroups[rootId] = [entityToItem[rootId]];
-          revisionGroups[rootId].push(item);
-          isRevision.add(item.id);
+      // 編集関係: editOf[i] = origIdx, forksAt[origIdx] = [editIdx, ...]
+      const editOf = {};
+      const forksAt = {};
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].revision_of && entityToIdx[items[i].revision_of] !== undefined) {
+          const origIdx = entityToIdx[items[i].revision_of];
+          editOf[i] = origIdx;
+          if (!forksAt[origIdx]) forksAt[origIdx] = [];
+          forksAt[origIdx].push(i);
         }
       }
 
-      // レンダリング：revision でないアイテムだけ表示し、グループがあればページネーション付き
-      for (const item of items) {
-        if (item.type !== 'agent_run') continue;
-        if (isRevision.has(item.id)) continue;
+      // 編集がなければ通常レンダリング
+      if (Object.keys(forksAt).length === 0) {
+        items.forEach(item => renderSingleItem(item));
+        return;
+      }
 
-        const group = revisionGroups[item.user_entity_id];
-        if (group && group.length > 1) {
-          // 編集グループ — ページネーション付きで最新版を表示
-          renderRevisionGroup(group);
-        } else {
-          // 通常メッセージ
-          renderSingleItem(item);
-        }
+      // フォーク地点を特定（昇順）
+      const forkIndices = Object.keys(forksAt).map(Number).sort((a, b) => a - b);
+
+      // ブランチ構造を構築して描画
+      // フォーク前の共有メッセージ
+      for (let i = 0; i < forkIndices[0]; i++) {
+        renderSingleItem(items[i]);
+      }
+
+      // 各フォーク地点を処理
+      for (let fi = 0; fi < forkIndices.length; fi++) {
+        const forkIdx = forkIndices[fi];
+        const editIndices = forksAt[forkIdx].sort((a, b) => a - b);
+
+        // ブランチ A（オリジナル）: forkIdx 〜 最初の edit の直前まで
+        const branchA = items.slice(forkIdx, editIndices[0]);
+
+        // ブランチ B〜N（各 edit 版）: edit 〜 次の edit の直前 or 終端
+        const editBranches = editIndices.map((ei, j) => {
+          const end = j < editIndices.length - 1 ? editIndices[j + 1] : items.length;
+          return items.slice(ei, end);
+        });
+
+        const branches = [branchA, ...editBranches];
+        renderBranchedSection(branches);
       }
     }
 
-    function renderSingleItem(item) {
+    function renderSingleItem(item, container) {
       if (item.input?.message) {
-        const userEl = addMsg(item.input.message, 'user');
+        const userEl = addMsg(item.input.message, 'user', container);
         if (item.user_entity_id) userEl._wrapper.dataset.entityId = item.user_entity_id;
       }
       if (item.output?.response) {
-        const agentEl = addMsg('', 'agent');
+        const agentEl = addMsg('', 'agent', container);
         agentEl._rawText = item.output.response;
         agentEl.innerHTML = renderMarkdown(item.output.response);
         if (item.response_entity_id) agentEl._wrapper.dataset.entityId = item.response_entity_id;
       }
     }
 
-    function renderRevisionGroup(group) {
-      // group[0] = original, group[1..] = 編集版（時系列順）
-      // 最新版（最後）をデフォルト表示
-      const currentIdx = group.length - 1;
-
-      // コンテナ要素
-      const container = document.createElement('div');
-      container.className = 'revision-group';
-
-      // 各バージョンの DOM を生成（非表示で）
-      const versions = group.map((item, idx) => {
-        const frag = document.createDocumentFragment();
-
-        let userWrapper = null;
-        if (item.input?.message) {
-          const userEl = addMsg(item.input.message, 'user');
-          if (item.user_entity_id) userEl._wrapper.dataset.entityId = item.user_entity_id;
-          userWrapper = userEl._wrapper;
-          frag.appendChild(userEl._wrapper);
-        }
-        let agentWrapper = null;
-        if (item.output?.response) {
-          const agentEl = addMsg('', 'agent');
-          agentEl._rawText = item.output.response;
-          agentEl.innerHTML = renderMarkdown(item.output.response);
-          if (item.response_entity_id) agentEl._wrapper.dataset.entityId = item.response_entity_id;
-          agentWrapper = agentEl._wrapper;
-          frag.appendChild(agentEl._wrapper);
-        }
-
-        // frag の子を container に移動
-        const wrappers = [];
-        while (frag.firstChild) {
-          const w = frag.firstChild;
-          w.style.display = idx === currentIdx ? '' : 'none';
-          container.appendChild(w);
-          wrappers.push(w);
-        }
-
-        return { item, wrappers, userWrapper, agentWrapper };
+    function renderBranchedSection(branches) {
+      // 各ブランチの DOM を生成
+      const branchDivs = branches.map(branchItems => {
+        const div = document.createElement('div');
+        div.className = 'branch-content';
+        branchItems.forEach(item => renderSingleItem(item, div));
+        return div;
       });
 
-      // ページネーション UI
+      // デフォルト: 最新ブランチ（最後）を表示
+      let activeIdx = branches.length - 1;
+      branchDivs.forEach((div, i) => { div.style.display = i === activeIdx ? '' : 'none'; });
+
+      // ページネーション
       const nav = document.createElement('div');
       nav.className = 'revision-nav';
       const prevBtn = document.createElement('button');
@@ -1683,40 +1662,28 @@
       const label = document.createElement('span');
       label.className = 'revision-label';
 
-      let activeIdx = currentIdx;
-
       function updateNav() {
-        label.textContent = `${activeIdx + 1} / ${group.length}`;
+        label.textContent = `${activeIdx + 1} / ${branches.length}`;
         prevBtn.disabled = activeIdx === 0;
-        nextBtn.disabled = activeIdx === group.length - 1;
+        nextBtn.disabled = activeIdx === branches.length - 1;
       }
 
       function showVersion(idx) {
-        versions.forEach((v, i) => {
-          v.wrappers.forEach(w => { w.style.display = i === idx ? '' : 'none'; });
-        });
+        branchDivs.forEach((div, i) => { div.style.display = i === idx ? '' : 'none'; });
         activeIdx = idx;
         updateNav();
       }
 
       prevBtn.addEventListener('click', () => { if (activeIdx > 0) showVersion(activeIdx - 1); });
-      nextBtn.addEventListener('click', () => { if (activeIdx < group.length - 1) showVersion(activeIdx + 1); });
-
+      nextBtn.addEventListener('click', () => { if (activeIdx < branches.length - 1) showVersion(activeIdx + 1); });
       nav.appendChild(prevBtn);
       nav.appendChild(label);
       nav.appendChild(nextBtn);
       updateNav();
 
-      // container 内でユーザーメッセージ wrapper の後にナビを挿入
-      // 最初のユーザー wrapper の後に配置
-      const firstUserWrapper = versions[currentIdx].wrappers[0];
-      if (firstUserWrapper) {
-        container.insertBefore(nav, firstUserWrapper.nextSibling);
-      } else {
-        container.prepend(nav);
-      }
-
-      messagesEl.appendChild(container);
+      // messagesEl にナビ → 各ブランチ div を追加
+      messagesEl.appendChild(nav);
+      branchDivs.forEach(div => messagesEl.appendChild(div));
       scrollToBottom();
     }
 
@@ -1951,7 +1918,7 @@
     }
 
     // --- DOM ヘルパー ---
-    function addMsg(text, cls) {
+    function addMsg(text, cls, targetContainer) {
       const wrapper = document.createElement('div');
       wrapper.className = `msg-wrapper msg-wrapper-${cls}`;
 
@@ -1996,7 +1963,7 @@
         });
       }
 
-      messagesEl.appendChild(wrapper);
+      (targetContainer || messagesEl).appendChild(wrapper);
       scrollToBottom();
       return el;
     }
