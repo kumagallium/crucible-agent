@@ -1410,11 +1410,11 @@
       </div>
       <div id="graph-container"></div>
       <div id="graph-legend">
-        <span class="legend-item"><span class="legend-dot" style="background:#4B7A52"></span> ユーザー入力</span>
-        <span class="legend-item"><span class="legend-dot" style="background:#e8f0e8"></span> AI 応答</span>
+        <span class="legend-item"><span class="legend-dot" style="background:#4B7A52"></span> ユーザー</span>
+        <span class="legend-item"><span class="legend-dot" style="background:#fff;border-color:#d5e0d7"></span> AI 応答</span>
         <span class="legend-item"><span class="legend-dot" style="background:#dbeafe"></span> ツール結果</span>
-        <span class="legend-item"><span class="legend-dot" style="background:#fef3c7"></span> Activity</span>
-        <span class="legend-item"><span class="legend-dot" style="background:#f3e8ff"></span> Agent</span>
+        <span class="legend-item" style="margin-left:12px">→ 会話の流れ</span>
+        <span class="legend-item" style="color:#b45309">⇢ 編集</span>
       </div>
     </div>
 
@@ -2708,46 +2708,93 @@
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const data = await resp.json();
 
+        // --- Entity のみの簡易グラフを構築 ---
+        // Activity を介して user_message → agent_response を直結
+        // 連続ターンの response → 次の user_message も接続
+
+        const nodeMap = {};  // id → node
+        for (const n of data.nodes) nodeMap[n.id] = n;
+
+        // Activity ごとに入力 Entity と出力 Entity を特定
+        // used(activity, entity) → 入力, wasGeneratedBy(entity, activity) → 出力
+        const activityInput = {};   // activity_id → entity_id (user_message)
+        const activityOutput = {};  // activity_id → entity_id (agent_response)
+
+        for (const e of data.edges) {
+          if (e.relation === 'used') {
+            const target = nodeMap[e.target];
+            if (target && target.node_type === 'entity') activityInput[e.source] = e.target;
+          }
+          if (e.relation === 'wasGeneratedBy') {
+            const source = nodeMap[e.source];
+            if (source && source.node_type === 'entity') activityOutput[e.target] = e.source;
+          }
+        }
+
+        // Entity ノードのみ抽出（時系列順）
+        const entities = data.nodes
+          .filter(n => n.node_type === 'entity')
+          .sort((a, b) => (a.created_at || '').localeCompare(b.created_at || ''));
+
         const elements = [];
 
-        // Agent ノードを type+label で統合（同じ LLM を 1 ノードに）
-        const agentMergeMap = {};  // old_id → canonical_id
-        const agentKeyMap = {};    // "type:label" → canonical node
-        for (const n of data.nodes) {
-          if (n.node_type === 'agent') {
-            const key = `${n.prov_type}:${n.label}`;
-            if (agentKeyMap[key]) {
-              agentMergeMap[n.id] = agentKeyMap[key].id;
-              continue;  // 重複を除外
-            }
-            agentKeyMap[key] = n;
-          }
-          const c = provColor(n);
+        // Entity ノードを追加
+        for (const n of entities) {
+          const isUser = n.prov_type === 'user_message';
+          const isResponse = n.prov_type === 'agent_response';
+          const isTool = n.prov_type === 'tool_result';
           elements.push({
             data: {
               id: n.id,
-              label: provLabel(n),
-              bgColor: c.bg,
-              fgColor: c.fg,
-              shape: provShape(n),
-              nodeType: n.node_type,
+              label: n.label || n.prov_type,
+              bgColor: isUser ? '#4B7A52' : isResponse ? '#ffffff' : '#dbeafe',
+              fgColor: isUser ? '#ffffff' : '#1a2e1d',
+              borderColor: isUser ? '#3d6844' : isResponse ? '#d5e0d7' : '#93c5fd',
+              nodeType: n.prov_type,
             },
           });
         }
 
+        // ターン内エッジ: user_message → agent_response（同一 Activity 経由）
+        const activities = data.nodes.filter(n => n.node_type === 'activity');
+        for (const a of activities) {
+          const inputId = activityInput[a.id];
+          const outputId = activityOutput[a.id];
+          if (inputId && outputId) {
+            elements.push({
+              data: { id: `turn-${a.id}`, source: inputId, target: outputId, label: '' },
+            });
+          }
+        }
+
+        // ターン間エッジ: agent_response → 次の user_message（時系列順で接続）
+        for (let i = 0; i < entities.length - 1; i++) {
+          const curr = entities[i];
+          const next = entities[i + 1];
+          if (curr.prov_type === 'agent_response' && next.prov_type === 'user_message') {
+            elements.push({
+              data: { id: `seq-${i}`, source: curr.id, target: next.id, label: '' },
+            });
+          }
+        }
+
+        // wasRevisionOf エッジ（編集関係）
         for (const e of data.edges) {
-          // 統合された Agent ノードに参照を置き換え
-          const source = agentMergeMap[e.source] || e.source;
-          const target = agentMergeMap[e.target] || e.target;
-          const edgeId = source + '-' + target + '-' + e.relation;
-          elements.push({
-            data: {
-              id: edgeId,
-              source,
-              target,
-              label: e.relation,
-            },
-          });
+          if (e.relation === 'wasRevisionOf') {
+            const src = nodeMap[e.source];
+            const tgt = nodeMap[e.target];
+            if (src && src.node_type === 'entity' && tgt && tgt.node_type === 'entity') {
+              elements.push({
+                data: {
+                  id: `rev-${e.source}-${e.target}`,
+                  source: e.source,
+                  target: e.target,
+                  label: '編集',
+                  isRevision: 'true',
+                },
+              });
+            }
+          }
         }
 
         if (cyInstance) cyInstance.destroy();
@@ -2764,46 +2811,22 @@
                 'color': 'data(fgColor)',
                 'text-valign': 'center',
                 'text-halign': 'center',
-                'font-size': '10px',
+                'font-size': '11px',
                 'font-family': 'Inter, sans-serif',
                 'text-wrap': 'wrap',
-                'text-max-width': '100px',
+                'text-max-width': '160px',
                 'width': 'label',
                 'height': 'label',
-                'padding': '10px',
-                'shape': 'data(shape)',
-                'border-width': 1,
-                'border-color': '#d5e0d7',
+                'padding': '12px',
+                'shape': 'round-rectangle',
+                'border-width': 1.5,
+                'border-color': 'data(borderColor)',
                 'text-outline-width': 0,
-              },
-            },
-            {
-              selector: 'node[nodeType = "activity"]',
-              style: {
-                'width': 30,
-                'height': 30,
-                'font-size': '8px',
-                'padding': '4px',
-              },
-            },
-            {
-              selector: 'node[nodeType = "agent"]',
-              style: {
-                'width': 30,
-                'height': 30,
-                'font-size': '8px',
-                'padding': '4px',
               },
             },
             {
               selector: 'edge',
               style: {
-                'label': 'data(label)',
-                'font-size': '8px',
-                'font-family': 'Inter, sans-serif',
-                'color': '#6b7f6e',
-                'text-rotation': 'autorotate',
-                'text-margin-y': -8,
                 'curve-style': 'bezier',
                 'target-arrow-shape': 'triangle',
                 'target-arrow-color': '#b8d4bb',
@@ -2812,13 +2835,34 @@
                 'arrow-scale': 0.8,
               },
             },
+            {
+              selector: 'edge[isRevision = "true"]',
+              style: {
+                'line-color': '#f59e0b',
+                'line-style': 'dashed',
+                'target-arrow-color': '#f59e0b',
+                'label': 'data(label)',
+                'font-size': '9px',
+                'font-family': 'Inter, sans-serif',
+                'color': '#b45309',
+                'text-rotation': 'autorotate',
+                'text-margin-y': -8,
+              },
+            },
           ],
           layout: {
-            name: 'breadthfirst',
-            directed: true,
-            spacingFactor: 1.5,
-            avoidOverlap: true,
-            padding: 30,
+            name: 'preset',
+            positions: (node) => {
+              // 時系列順に上から下へ配置
+              const idx = entities.findIndex(e => e.id === node.id());
+              if (idx < 0) return { x: 0, y: 0 };
+              const e = entities[idx];
+              const isUser = e.prov_type === 'user_message';
+              // ユーザーを右、AI を左に配置（チャット UI と同じ）
+              const x = isUser ? 250 : -250;
+              const y = idx * 100;
+              return { x, y };
+            },
           },
           userZoomingEnabled: true,
           userPanningEnabled: true,
