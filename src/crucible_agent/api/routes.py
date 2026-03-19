@@ -9,6 +9,7 @@ import uuid
 
 import httpx
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
+from pydantic import BaseModel
 
 from crucible_agent import __version__
 from crucible_agent.agent.runner import run_agent, run_agent_stream
@@ -190,6 +191,49 @@ async def agent_run(req: AgentRunRequest) -> AgentRunResponse:
         provenance_id=provenance_id,
         token_usage=TokenUsage(**result.get("token_usage", {})),
     )
+
+
+class _SessionTitleRequest(BaseModel):
+    first_message: str
+
+
+@router.post("/sessions/title")
+async def generate_session_title(req: _SessionTitleRequest) -> dict:
+    """最初のユーザーメッセージから AI セッションタイトルを生成する"""
+    try:
+        headers = {
+            "Authorization": f"Bearer {settings.litellm_api_key}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "model": settings.llm_model,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": (
+                        "次のメッセージを15文字以内の簡潔なタイトルにしてください。"
+                        "タイトルのみを返してください。\n\n"
+                        + req.first_message[:300]
+                    ),
+                }
+            ],
+            "max_tokens": 30,
+            "temperature": 0.3,
+        }
+        async with httpx.AsyncClient(timeout=8.0) as client:
+            resp = await client.post(
+                f"{settings.litellm_api_base}/chat/completions",
+                headers=headers,
+                json=payload,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            title = data["choices"][0]["message"]["content"].strip().strip('"\'「」')
+            return {"title": title}
+    except Exception:
+        logger.warning("Title generation failed", exc_info=True)
+        short = req.first_message.strip()[:25]
+        return {"title": short + ("..." if len(req.first_message.strip()) > 25 else "")}
 
 
 @router.get("/provenance")

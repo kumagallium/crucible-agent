@@ -29,7 +29,8 @@
       --warn-bg: #fffbeb; --warn-fg: #b45309; --warn-border: #fde68a;
       --info-bg: #f0f9ff; --info-fg: #0369a1; --info-border: #bae6fd;
 
-      --sidebar-w: 280px;
+      --history-w: 240px;
+      --right-panel-w: 264px;
       --radius-xl: 12px;
       --radius-lg: 8px;
       --radius-full: 9999px;
@@ -45,48 +46,414 @@
       display: flex;
       font-size: 14px;
       line-height: 1.6;
+      overflow: hidden;
     }
 
-    /* --- サイドバー --- */
-    #sidebar {
-      width: var(--sidebar-w);
+    /* ===== 左: 履歴サイドバー ===== */
+    #history-sidebar {
+      width: var(--history-w);
       background: var(--card);
       border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+
+    .hs-logo {
+      padding: 8px 16px 4px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+    }
+
+    .hs-logo img {
+      height: 80px;
+      margin: -26px -14px;
+      object-fit: contain;
+    }
+
+    .hs-actions {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    #new-chat-btn {
+      width: 100%;
+      background: var(--primary);
+      color: var(--primary-fg);
+      border: none;
+      border-radius: var(--radius-lg);
+      padding: 7px 12px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      font-family: inherit;
+      transition: background 0.2s;
+      text-align: left;
+    }
+
+    #new-chat-btn:hover { background: #3d6844; }
+
+    .session-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 6px;
+    }
+
+    .session-empty {
+      color: var(--muted-fg);
+      font-size: 12px;
+      padding: 12px 8px;
+      text-align: center;
+    }
+
+    .session-item {
+      padding: 8px 10px;
+      border-radius: var(--radius-lg);
+      cursor: pointer;
+      margin-bottom: 2px;
+      transition: background 0.15s;
+    }
+
+    .session-item:hover { background: var(--muted); }
+    .session-item.active { background: var(--accent); }
+
+    .session-item .si-title {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--foreground);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .session-item.active .si-title {
+      color: var(--primary);
+      font-weight: 600;
+    }
+
+    .session-item .si-time {
+      font-size: 11px;
+      color: var(--muted-fg);
+      margin-top: 1px;
+    }
+
+    /* ===== 中: メインエリア ===== */
+    #main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      background: var(--background);
+    }
+
+    header {
+      padding: 10px 20px;
+      background: var(--card);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 13px;
+      flex-shrink: 0;
+    }
+
+    header .conn-status {
+      font-size: 11px;
+      font-weight: 500;
+      padding: 2px 10px;
+      border-radius: var(--radius-full);
+      border: 1px solid;
+    }
+
+    header .conn-status.connected {
+      background: var(--running-bg);
+      color: var(--running-fg);
+      border-color: var(--running-border);
+    }
+
+    header .conn-status.disconnected {
+      background: var(--error-bg);
+      color: var(--error-fg);
+      border-color: var(--error-border);
+    }
+
+    header .session-id {
+      font-size: 11px;
+      color: var(--muted-fg);
+      font-family: ui-monospace, 'SF Mono', monospace;
+    }
+
+    header .spacer { flex: 1; }
+
+    /* メッセージエリア */
+    #messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .msg {
+      max-width: 75%;
+      padding: 10px 14px;
+      border-radius: var(--radius-xl);
+      line-height: 1.6;
+      font-size: 14px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .msg.user {
+      align-self: flex-end;
+      background: var(--primary);
+      color: var(--primary-fg);
+      border-bottom-right-radius: 4px;
+      box-shadow: 0 1px 3px rgba(75, 122, 82, 0.2);
+    }
+
+    .msg.agent {
+      align-self: flex-start;
+      background: var(--card);
+      color: var(--foreground);
+      border: 1px solid var(--border);
+      border-bottom-left-radius: 4px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+      white-space: normal;
+    }
+
+    /* Agent Markdown */
+    .msg.agent p { margin-bottom: 8px; }
+    .msg.agent p:last-child { margin-bottom: 0; }
+    .msg.agent strong { font-weight: 600; }
+    .msg.agent em { font-style: italic; }
+    .msg.agent code {
+      background: var(--muted);
+      padding: 1px 5px;
+      border-radius: 4px;
+      font-family: ui-monospace, 'SF Mono', monospace;
+      font-size: 13px;
+    }
+    .msg.agent pre {
+      background: var(--muted);
+      padding: 10px 12px;
+      border-radius: var(--radius-lg);
+      overflow-x: auto;
+      margin: 8px 0;
+      font-size: 12px;
+    }
+    .msg.agent pre code { background: none; padding: 0; }
+    .msg.agent ul, .msg.agent ol { margin: 6px 0; padding-left: 20px; }
+    .msg.agent li { margin-bottom: 4px; }
+    .msg.agent h1, .msg.agent h2, .msg.agent h3,
+    .msg.agent h4, .msg.agent h5, .msg.agent h6 {
+      margin: 12px 0 6px;
+      font-weight: 600;
+      color: var(--foreground);
+    }
+    .msg.agent h1 { font-size: 18px; }
+    .msg.agent h2 { font-size: 16px; }
+    .msg.agent h3 { font-size: 15px; }
+    .msg.agent table {
+      border-collapse: collapse;
+      margin: 8px 0;
+      font-size: 13px;
+      width: 100%;
+    }
+    .msg.agent th, .msg.agent td {
+      border: 1px solid var(--border);
+      padding: 6px 10px;
+      text-align: left;
+    }
+    .msg.agent th { background: var(--muted); font-weight: 600; }
+    .msg.agent blockquote {
+      border-left: 3px solid var(--primary);
+      padding-left: 12px;
+      margin: 8px 0;
+      color: var(--muted-fg);
+    }
+    .msg.agent hr {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 12px 0;
+    }
+
+    /* ツール実行ステップ（折りたたみ） */
+    .tool-steps {
+      align-self: flex-start;
+      max-width: 80%;
+      margin: 2px 0;
+    }
+
+    .tool-steps summary {
+      cursor: pointer;
+      font-size: 12px;
+      color: var(--muted-fg);
+      padding: 4px 8px;
+      border-radius: var(--radius-lg);
+      background: var(--muted);
+      border: 1px solid var(--border);
+      list-style: none;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s;
+    }
+
+    .tool-steps summary:hover { background: var(--accent); }
+
+    .tool-steps summary::before {
+      content: '▶';
+      font-size: 9px;
+      transition: transform 0.2s;
+    }
+
+    .tool-steps[open] summary::before { transform: rotate(90deg); }
+
+    .tool-steps .step {
+      padding: 6px 10px;
+      margin: 4px 0 4px 16px;
+      border-left: 2px solid var(--border);
+      font-size: 11px;
+    }
+
+    .tool-steps .step.start { color: var(--info-fg); }
+    .tool-steps .step.end { color: var(--running-fg); }
+    .tool-steps .step.rejected { color: var(--error-fg); }
+    .tool-steps .step code {
+      font-size: 10px;
+      color: var(--muted-fg);
+      font-family: ui-monospace, 'SF Mono', monospace;
+      display: block;
+      margin-top: 3px;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    .msg.system {
+      align-self: center;
+      color: var(--muted-fg);
+      font-size: 12px;
+      font-style: italic;
+    }
+
+    .typing { opacity: 0.8; }
+    .typing::after {
+      content: '▊';
+      color: var(--primary);
+      animation: blink 0.7s infinite;
+    }
+
+    @keyframes blink { 50% { opacity: 0; } }
+
+    /* 入力エリア */
+    #input-area {
+      padding: 14px 20px;
+      background: var(--card);
+      border-top: 1px solid var(--border);
+      display: flex;
+      gap: 10px;
+      flex-shrink: 0;
+    }
+
+    #input-area textarea {
+      flex: 1;
+      background: var(--background);
+      color: var(--foreground);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 10px 14px;
+      font-size: 14px;
+      font-family: inherit;
+      resize: none;
+      min-height: 44px;
+      max-height: 120px;
+      transition: border-color 0.2s;
+    }
+
+    #input-area textarea:focus {
+      outline: none;
+      border-color: var(--ring);
+      box-shadow: 0 0 0 2px rgba(75, 122, 82, 0.15);
+    }
+
+    #input-area button {
+      background: var(--primary);
+      color: var(--primary-fg);
+      border: none;
+      border-radius: var(--radius-lg);
+      padding: 0 22px;
+      font-size: 14px;
+      font-weight: 500;
+      font-family: inherit;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    #input-area button:hover { background: #3d6844; }
+    #input-area button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* ===== 右: 設定パネル ===== */
+    #right-panel {
+      width: var(--right-panel-w);
+      background: var(--card);
+      border-left: 1px solid var(--border);
       display: flex;
       flex-direction: column;
       overflow-y: auto;
       flex-shrink: 0;
     }
 
-    #sidebar .logo {
-      padding: 12px 16px;
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      align-items: center;
-    }
-
-    #sidebar .logo img {
-      height: 100px;
-      margin: -40px -18px;
-      object-fit: contain;
-    }
-
-    .sidebar-section {
-      padding: 14px 16px;
+    .rp-section {
       border-bottom: 1px solid var(--border);
     }
 
-    .sidebar-section h3 {
+    /* Status セクション (collapsible、デフォルト閉) */
+    details.rp-section > summary {
+      cursor: pointer;
+      list-style: none;
+      padding: 11px 16px;
       font-size: 11px;
       font-weight: 600;
       text-transform: uppercase;
       color: var(--muted-fg);
-      margin-bottom: 10px;
+      letter-spacing: 0.5px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      user-select: none;
+      transition: color 0.15s;
+    }
+
+    details.rp-section > summary::-webkit-details-marker { display: none; }
+
+    details.rp-section > summary::before {
+      content: '▶';
+      font-size: 8px;
+      transition: transform 0.2s;
+      flex-shrink: 0;
+    }
+
+    details.rp-section[open] > summary::before { transform: rotate(90deg); }
+    details.rp-section > summary:hover { color: var(--foreground); }
+
+    .rp-title {
+      padding: 11px 16px 6px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      color: var(--muted-fg);
       letter-spacing: 0.5px;
     }
 
-    .sidebar-section select,
-    .sidebar-section input {
+    .rp-body {
+      padding: 0 16px 12px;
+    }
+
+    .rp-body select {
       width: 100%;
       background: var(--background);
       color: var(--foreground);
@@ -99,14 +466,13 @@
       transition: border-color 0.2s;
     }
 
-    .sidebar-section select:focus,
-    .sidebar-section input:focus {
+    .rp-body select:focus {
       outline: none;
       border-color: var(--ring);
       box-shadow: 0 0 0 2px rgba(75, 122, 82, 0.15);
     }
 
-    .sidebar-section textarea {
+    .rp-body textarea {
       width: 100%;
       background: var(--background);
       color: var(--foreground);
@@ -120,13 +486,13 @@
       transition: border-color 0.2s;
     }
 
-    .sidebar-section textarea:focus {
+    .rp-body textarea:focus {
       outline: none;
       border-color: var(--ring);
       box-shadow: 0 0 0 2px rgba(75, 122, 82, 0.15);
     }
 
-    .sidebar-section label {
+    .rp-body label {
       font-size: 12px;
       font-weight: 500;
       color: var(--muted-fg);
@@ -172,10 +538,7 @@
       gap: 8px;
     }
 
-    .tool-item.disabled {
-      opacity: 0.45;
-    }
-
+    .tool-item.disabled { opacity: 0.45; }
     .tool-item:hover { box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
 
     .tool-item .tool-toggle {
@@ -192,9 +555,7 @@
       padding: 0;
     }
 
-    .tool-item .tool-toggle.on {
-      background: var(--primary);
-    }
+    .tool-item .tool-toggle.on { background: var(--primary); }
 
     .tool-item .tool-toggle::after {
       content: '';
@@ -209,9 +570,7 @@
       box-shadow: 0 1px 2px rgba(0,0,0,0.15);
     }
 
-    .tool-item .tool-toggle.on::after {
-      transform: translateX(14px);
-    }
+    .tool-item .tool-toggle.on::after { transform: translateX(14px); }
 
     .tool-item .tool-info { flex: 1; min-width: 0; }
     .tool-item .name { font-size: 13px; font-weight: 600; color: var(--foreground); }
@@ -306,10 +665,7 @@
       white-space: pre-wrap;
     }
 
-    .msg.approval .approval-actions {
-      display: flex;
-      gap: 6px;
-    }
+    .msg.approval .approval-actions { display: flex; gap: 6px; }
 
     .msg.approval .approval-actions button {
       padding: 4px 14px;
@@ -338,423 +694,36 @@
 
     .btn-reject:hover { background: var(--error-bg); }
 
-    /* --- メインエリア --- */
-    #main {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      min-width: 0;
-      background: var(--background);
-    }
-
-    header {
-      padding: 10px 20px;
-      background: var(--card);
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      font-size: 13px;
-    }
-
-    header .conn-status {
-      font-size: 11px;
-      font-weight: 500;
-      padding: 2px 10px;
-      border-radius: var(--radius-full);
-      border: 1px solid;
-    }
-
-    header .conn-status.connected {
-      background: var(--running-bg);
-      color: var(--running-fg);
-      border-color: var(--running-border);
-    }
-
-    header .conn-status.disconnected {
-      background: var(--error-bg);
-      color: var(--error-fg);
-      border-color: var(--error-border);
-    }
-
-    header .spacer { flex: 1; }
-    header .health-summary { font-size: 12px; color: var(--muted-fg); }
-    header .session-id {
-      font-size: 11px;
-      color: var(--muted-fg);
-      font-family: ui-monospace, 'SF Mono', monospace;
-    }
-    header .history-btn {
-      font-size: 11px;
-      background: var(--muted);
-      color: var(--muted-fg);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-lg);
-      padding: 3px 10px;
-      cursor: pointer;
-      font-family: inherit;
-      transition: all 0.2s;
-    }
-    header .history-btn:hover { background: var(--accent); color: var(--foreground); }
-
-    /* 履歴パネル */
-    .history-panel {
-      display: none;
-      position: fixed;
-      top: 0; right: 0; bottom: 0;
-      width: 380px;
-      background: var(--card);
-      border-left: 1px solid var(--border);
-      box-shadow: -4px 0 12px rgba(0,0,0,0.08);
-      z-index: 100;
-      flex-direction: column;
-      overflow: hidden;
-    }
-    .history-panel.open { display: flex; }
-    .history-panel .panel-header {
-      padding: 12px 16px;
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      font-size: 14px;
-      font-weight: 600;
-    }
-    .history-panel .panel-close {
-      background: none;
-      border: none;
-      font-size: 18px;
-      cursor: pointer;
-      color: var(--muted-fg);
-      padding: 0 4px;
-    }
-    .history-panel .panel-body {
-      flex: 1;
-      overflow-y: auto;
-      padding: 12px 16px;
-    }
-    .history-item {
-      padding: 8px 10px;
-      border: 1px solid var(--border);
-      border-radius: var(--radius-lg);
-      margin-bottom: 8px;
-      font-size: 12px;
-    }
-    .history-item .hi-type {
-      font-weight: 600;
-      font-size: 11px;
-      text-transform: uppercase;
-      margin-bottom: 4px;
-    }
-    .history-item .hi-type.agent_run { color: var(--primary); }
-    .history-item .hi-type.tool_use { color: var(--info-fg); }
-    .history-item .hi-tool { color: var(--foreground); font-weight: 500; }
-    .history-item .hi-time { color: var(--muted-fg); font-size: 10px; }
-    .history-item .hi-detail {
-      font-size: 11px;
-      color: var(--muted-fg);
-      margin-top: 4px;
-      white-space: pre-wrap;
-      word-break: break-all;
-      max-height: 80px;
-      overflow: hidden;
-    }
-
-    /* メッセージエリア */
-    #messages {
-      flex: 1;
-      overflow-y: auto;
-      padding: 16px;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-
-    .msg {
-      max-width: 75%;
-      padding: 10px 14px;
-      border-radius: var(--radius-xl);
-      line-height: 1.6;
-      font-size: 14px;
-      white-space: pre-wrap;
-      word-break: break-word;
-    }
-
-    .msg.user {
-      align-self: flex-end;
-      background: var(--primary);
-      color: var(--primary-fg);
-      border-bottom-right-radius: 4px;
-      box-shadow: 0 1px 3px rgba(75, 122, 82, 0.2);
-    }
-
-    .msg.agent {
-      align-self: flex-start;
-      background: var(--card);
-      color: var(--foreground);
-      border: 1px solid var(--border);
-      border-bottom-left-radius: 4px;
-      box-shadow: 0 1px 2px rgba(0,0,0,0.04);
-      white-space: normal;
-    }
-
-    /* Agent Markdown */
-    .msg.agent p { margin-bottom: 8px; }
-    .msg.agent p:last-child { margin-bottom: 0; }
-    .msg.agent strong { font-weight: 600; }
-    .msg.agent em { font-style: italic; }
-    .msg.agent code {
-      background: var(--muted);
-      padding: 1px 5px;
-      border-radius: 4px;
-      font-family: ui-monospace, 'SF Mono', monospace;
-      font-size: 13px;
-    }
-    .msg.agent pre {
-      background: var(--muted);
-      padding: 10px 12px;
-      border-radius: var(--radius-lg);
-      overflow-x: auto;
-      margin: 8px 0;
-      font-size: 12px;
-    }
-    .msg.agent pre code {
-      background: none;
-      padding: 0;
-    }
-    .msg.agent ul, .msg.agent ol {
-      margin: 6px 0;
-      padding-left: 20px;
-    }
-    .msg.agent li { margin-bottom: 4px; }
-    .msg.agent h1, .msg.agent h2, .msg.agent h3,
-    .msg.agent h4, .msg.agent h5, .msg.agent h6 {
-      margin: 12px 0 6px;
-      font-weight: 600;
-      color: var(--foreground);
-    }
-    .msg.agent h1 { font-size: 18px; }
-    .msg.agent h2 { font-size: 16px; }
-    .msg.agent h3 { font-size: 15px; }
-    .msg.agent table {
-      border-collapse: collapse;
-      margin: 8px 0;
-      font-size: 13px;
-      width: 100%;
-    }
-    .msg.agent th, .msg.agent td {
-      border: 1px solid var(--border);
-      padding: 6px 10px;
-      text-align: left;
-    }
-    .msg.agent th {
-      background: var(--muted);
-      font-weight: 600;
-    }
-    .msg.agent blockquote {
-      border-left: 3px solid var(--primary);
-      padding-left: 12px;
-      margin: 8px 0;
-      color: var(--muted-fg);
-    }
-    .msg.agent hr {
-      border: none;
-      border-top: 1px solid var(--border);
-      margin: 12px 0;
-    }
-
-    /* ツール実行ステップ（折りたたみ） */
-    .tool-steps {
-      align-self: flex-start;
-      max-width: 80%;
-      margin: 2px 0;
-    }
-
-    .tool-steps summary {
-      cursor: pointer;
-      font-size: 12px;
-      color: var(--muted-fg);
-      padding: 4px 8px;
-      border-radius: var(--radius-lg);
-      background: var(--muted);
-      border: 1px solid var(--border);
-      list-style: none;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      transition: all 0.2s;
-    }
-
-    .tool-steps summary:hover { background: var(--accent); }
-
-    .tool-steps summary::before {
-      content: '▶';
-      font-size: 9px;
-      transition: transform 0.2s;
-    }
-
-    .tool-steps[open] summary::before {
-      transform: rotate(90deg);
-    }
-
-    .tool-steps .step {
-      padding: 6px 10px;
-      margin: 4px 0 4px 16px;
-      border-left: 2px solid var(--border);
-      font-size: 11px;
-    }
-
-    .tool-steps .step.start {
-      color: var(--info-fg);
-    }
-
-    .tool-steps .step.end {
-      color: var(--running-fg);
-    }
-
-    .tool-steps .step.rejected {
-      color: var(--error-fg);
-    }
-
-    .tool-steps .step code {
-      font-size: 10px;
-      color: var(--muted-fg);
-      font-family: ui-monospace, 'SF Mono', monospace;
-      display: block;
-      margin-top: 3px;
-      white-space: pre-wrap;
-      word-break: break-all;
-    }
-
-    .msg.system {
-      align-self: center;
-      color: var(--muted-fg);
-      font-size: 12px;
-      font-style: italic;
-    }
-
-    .typing { opacity: 0.8; }
-    .typing::after {
-      content: '▊';
-      color: var(--primary);
-      animation: blink 0.7s infinite;
-    }
-
-    @keyframes blink { 50% { opacity: 0; } }
-
-    /* 入力エリア */
-    #input-area {
-      padding: 14px 20px;
-      background: var(--card);
-      border-top: 1px solid var(--border);
-      display: flex;
-      gap: 10px;
-    }
-
-    #input-area textarea {
-      flex: 1;
-      background: var(--background);
-      color: var(--foreground);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-lg);
-      padding: 10px 14px;
-      font-size: 14px;
-      font-family: inherit;
-      resize: none;
-      min-height: 44px;
-      max-height: 120px;
-      transition: border-color 0.2s;
-    }
-
-    #input-area textarea:focus {
-      outline: none;
-      border-color: var(--ring);
-      box-shadow: 0 0 0 2px rgba(75, 122, 82, 0.15);
-    }
-
-    #input-area button {
-      background: var(--primary);
-      color: var(--primary-fg);
-      border: none;
-      border-radius: var(--radius-lg);
-      padding: 0 22px;
-      font-size: 14px;
-      font-weight: 500;
-      font-family: inherit;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-
-    #input-area button:hover { background: #3d6844; }
-    #input-area button:disabled { opacity: 0.4; cursor: not-allowed; }
-
     /* レスポンシブ */
-    @media (max-width: 768px) {
-      #sidebar { display: none; }
+    @media (max-width: 900px) {
+      #history-sidebar { display: none; }
+    }
+    @media (max-width: 1100px) {
+      #right-panel { display: none; }
     }
   </style>
 </head>
 <body>
-  <!-- サイドバー -->
-  <div id="sidebar">
-    <div class="logo"><img src="/chat-ui/logo.png" alt="Crucible Agent"></div>
-
-    <!-- ヘルスステータス -->
-    <div class="sidebar-section" id="health-section">
-      <h3>Status</h3>
-      <div id="health-list">読み込み中...</div>
+  <!-- ===== 左: 履歴サイドバー ===== -->
+  <div id="history-sidebar">
+    <div class="hs-logo">
+      <img src="/chat-ui/logo.png" alt="Crucible Agent">
     </div>
-
-    <!-- プロファイル設定 -->
-    <div class="sidebar-section">
-      <h3>Profile</h3>
-      <select id="profile">
-        <option value="">デフォルト</option>
-      </select>
-      <label>カスタム指示</label>
-      <textarea id="custom-instructions" placeholder="追加の指示（任意）..."></textarea>
+    <div class="hs-actions">
+      <button id="new-chat-btn">＋ 新しいチャット</button>
     </div>
-
-    <!-- Plan モード -->
-    <div class="sidebar-section">
-      <h3>Plan Mode</h3>
-      <div class="plan-toggle-row">
-        <div>
-          <div class="label">ツール実行前に確認</div>
-          <div class="sublabel">ON にするとツール実行前に承認を求めます</div>
-        </div>
-        <button id="plan-toggle" class="plan-toggle" title="OFF"></button>
-      </div>
-    </div>
-
-    <!-- ツール一覧 -->
-    <div class="sidebar-section">
-      <h3>Tools</h3>
-      <div id="tool-list">読み込み中...</div>
+    <div id="session-list" class="session-list">
+      <div class="session-empty">読み込み中...</div>
     </div>
   </div>
 
-  <!-- メイン -->
+  <!-- ===== 中: チャットエリア ===== -->
   <div id="main">
     <header>
       <span id="status" class="conn-status disconnected">切断</span>
       <span id="session-display" class="session-id"></span>
       <span class="spacer"></span>
-      <button id="new-session-btn" class="history-btn">＋ 新しいセッション</button>
-      <button id="history-btn" class="history-btn">📋 履歴</button>
-      <span id="header-info" class="health-summary"></span>
     </header>
-
-    <!-- 履歴パネル -->
-    <div id="history-panel" class="history-panel">
-      <div class="panel-header">
-        <span>セッション履歴</span>
-        <button id="history-close" class="panel-close">×</button>
-      </div>
-      <div id="history-body" class="panel-body">
-        <div style="color:var(--muted-fg);font-size:12px;">セッションを開始すると履歴が表示されます</div>
-      </div>
-    </div>
 
     <div id="messages"></div>
 
@@ -762,6 +731,51 @@
       <textarea id="input" placeholder="メッセージを入力... (Enter で送信)" rows="1"></textarea>
       <button id="send" disabled>送信</button>
     </div>
+  </div>
+
+  <!-- ===== 右: 設定パネル ===== -->
+  <div id="right-panel">
+
+    <!-- Status（折りたたみ・デフォルト閉） -->
+    <details class="rp-section">
+      <summary>Status</summary>
+      <div class="rp-body" id="health-list">読み込み中...</div>
+    </details>
+
+    <!-- プロファイル設定 -->
+    <div class="rp-section">
+      <div class="rp-title">Profile</div>
+      <div class="rp-body">
+        <select id="profile">
+          <option value="">デフォルト</option>
+        </select>
+        <label>カスタム指示</label>
+        <textarea id="custom-instructions" placeholder="追加の指示（任意）..."></textarea>
+      </div>
+    </div>
+
+    <!-- Plan モード -->
+    <div class="rp-section">
+      <div class="rp-title">Plan Mode</div>
+      <div class="rp-body">
+        <div class="plan-toggle-row">
+          <div>
+            <div class="label">ツール実行前に確認</div>
+            <div class="sublabel">ON にするとツール実行前に承認を求めます</div>
+          </div>
+          <button id="plan-toggle" class="plan-toggle" title="OFF"></button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ツール一覧 -->
+    <div class="rp-section">
+      <div class="rp-title">Tools</div>
+      <div class="rp-body">
+        <div id="tool-list">読み込み中...</div>
+      </div>
+    </div>
+
   </div>
 
   <script>
@@ -773,17 +787,148 @@
     const customInstrEl = document.getElementById('custom-instructions');
     const healthListEl = document.getElementById('health-list');
     const toolListEl = document.getElementById('tool-list');
-    const headerInfoEl = document.getElementById('header-info');
-
+    const sessionListEl = document.getElementById('session-list');
+    const sessionDisplay = document.getElementById('session-display');
     const planToggleBtn = document.getElementById('plan-toggle');
+    const newChatBtn = document.getElementById('new-chat-btn');
 
     let ws = null;
     let currentAgentMsg = null;
-    let toolStates = {}; // { name: true/false }
+    let toolStates = {};
     let planMode = false;
+    let firstUserMessage = null; // 現セッションの最初のユーザーメッセージ（タイトル生成用）
+    let manualDisconnect = false; // セッション切り替え時の自動再接続を抑制
+    let suppressConnectMsg = false; // 過去セッション復元時の接続メッセージを抑制
+
+    // --- セッション ID 管理 ---
+    const STORAGE_KEY = 'crucible_session_id';
+    const TITLE_KEY = 'crucible_session_titles';
+
+    let wsSessionId = localStorage.getItem(STORAGE_KEY);
+    if (!wsSessionId) {
+      wsSessionId = crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36);
+      localStorage.setItem(STORAGE_KEY, wsSessionId);
+    }
+
+    function getSessionTitle(sid) {
+      try {
+        const titles = JSON.parse(localStorage.getItem(TITLE_KEY) || '{}');
+        return titles[sid] || null;
+      } catch { return null; }
+    }
+
+    function saveSessionTitle(sid, title) {
+      try {
+        const titles = JSON.parse(localStorage.getItem(TITLE_KEY) || '{}');
+        titles[sid] = title;
+        localStorage.setItem(TITLE_KEY, JSON.stringify(titles));
+      } catch {}
+    }
+
+    async function generateTitle(sid, msg) {
+      try {
+        const resp = await fetch('/sessions/title', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ first_message: msg }),
+        });
+        const data = await resp.json();
+        if (data.title) {
+          saveSessionTitle(sid, data.title);
+          loadSessionList();
+        }
+      } catch {}
+    }
+
+    function formatTimeAgo(date) {
+      const diff = Date.now() - date.getTime();
+      const mins = Math.floor(diff / 60000);
+      const hours = Math.floor(diff / 3600000);
+      const days = Math.floor(diff / 86400000);
+      if (mins < 1) return 'たった今';
+      if (mins < 60) return `${mins}分前`;
+      if (hours < 24) return `${hours}時間前`;
+      if (days < 7) return `${days}日前`;
+      return date.toLocaleDateString('ja-JP');
+    }
+
+    // --- セッションリスト ---
+    async function loadSessionList() {
+      try {
+        const sessions = await fetch('/provenance').then(r => r.json());
+        if (!sessions.length) {
+          sessionListEl.innerHTML = '<div class="session-empty">履歴がありません</div>';
+          return;
+        }
+        let html = '';
+        for (const s of sessions) {
+          const isCurrent = s.session_id === wsSessionId;
+          const title = getSessionTitle(s.session_id) || s.session_id.slice(0, 8);
+          const time = s.last_at ? formatTimeAgo(new Date(s.last_at)) : '';
+          html += `<div class="session-item${isCurrent ? ' active' : ''}" data-sid="${escapeHtml(s.session_id)}">
+            <div class="si-title">${escapeHtml(title)}</div>
+            <div class="si-time">${escapeHtml(time)}</div>
+          </div>`;
+        }
+        sessionListEl.innerHTML = html;
+        sessionListEl.querySelectorAll('.session-item[data-sid]').forEach(el => {
+          el.addEventListener('click', () => switchSession(el.dataset.sid));
+        });
+      } catch {
+        sessionListEl.innerHTML = '<div class="session-empty">取得失敗</div>';
+      }
+    }
+
+    // --- セッション切り替え ---
+    async function switchSession(sid) {
+      if (sid === wsSessionId) return;
+      wsSessionId = sid;
+      localStorage.setItem(STORAGE_KEY, wsSessionId);
+      firstUserMessage = null;
+
+      // 過去メッセージを復元
+      messagesEl.innerHTML = '';
+      try {
+        await loadSessionMessages(sid);
+      } catch {}
+
+      // WS 再接続（接続メッセージは抑制）
+      suppressConnectMsg = true;
+      manualDisconnect = true;
+      if (ws) ws.close();
+      connect();
+
+      loadSessionList();
+    }
+
+    async function loadSessionMessages(sid) {
+      const items = await fetch(`/provenance/${sid}`).then(r => r.json());
+      for (const item of items) {
+        if (item.type === 'agent_run') {
+          if (item.input?.message) {
+            addMsg(item.input.message, 'user');
+          }
+          if (item.output?.response) {
+            const el = addMsg('', 'agent');
+            el._rawText = item.output.response;
+            el.innerHTML = renderMarkdown(item.output.response);
+          }
+        }
+      }
+    }
+
+    function newSession() {
+      wsSessionId = crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36);
+      localStorage.setItem(STORAGE_KEY, wsSessionId);
+      firstUserMessage = null;
+      messagesEl.innerHTML = '';
+      manualDisconnect = true;
+      if (ws) ws.close();
+      connect();
+      loadSessionList();
+    }
 
     // --- データ取得 ---
-
     function loadHealth() {
       fetch('/health')
         .then(r => r.json())
@@ -798,7 +943,6 @@
           }
           html += `<div style="margin-top:8px;font-size:11px;color:var(--muted-fg)">v${data.version}</div>`;
           healthListEl.innerHTML = html;
-          headerInfoEl.textContent = data.status;
         })
         .catch(() => { healthListEl.textContent = '取得失敗'; });
     }
@@ -825,7 +969,6 @@
             toolListEl.innerHTML = '<div style="color:var(--muted-fg);font-size:12px;">ツールが見つかりません</div>';
             return;
           }
-          // 初回のみ全ツールを ON に
           for (const t of data.tools) {
             if (!(t.name in toolStates)) toolStates[t.name] = true;
           }
@@ -852,7 +995,6 @@
       }
       toolListEl.innerHTML = html;
 
-      // トグルイベント
       toolListEl.querySelectorAll('.tool-toggle').forEach(btn => {
         btn.addEventListener('click', (e) => {
           e.stopPropagation();
@@ -872,15 +1014,6 @@
     }
 
     // --- WebSocket ---
-
-    // セッション ID を localStorage に保存（更新しても維持）
-    const STORAGE_KEY = 'crucible_session_id';
-    let wsSessionId = localStorage.getItem(STORAGE_KEY);
-    if (!wsSessionId) {
-      wsSessionId = crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36);
-      localStorage.setItem(STORAGE_KEY, wsSessionId);
-    }
-
     function connect() {
       const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
       ws = new WebSocket(`${proto}//${location.host}/agent/ws?session_id=${wsSessionId}`);
@@ -891,14 +1024,21 @@
         sendBtn.disabled = false;
         sessionDisplay.textContent = wsSessionId.slice(0, 8);
         sessionDisplay.dataset.sessionId = wsSessionId;
-        addSystemMsg('エージェントに接続しました');
+        if (!suppressConnectMsg) {
+          addSystemMsg('エージェントに接続しました');
+        }
+        suppressConnectMsg = false;
+        loadSessionList();
       };
 
       ws.onclose = () => {
         statusEl.textContent = '切断';
         statusEl.className = 'conn-status disconnected';
         sendBtn.disabled = true;
-        setTimeout(connect, 3000);
+        if (!manualDisconnect) {
+          setTimeout(connect, 3000);
+        }
+        manualDisconnect = false;
       };
 
       ws.onerror = () => {};
@@ -935,12 +1075,17 @@
             }
             currentAgentMsg = null;
           }
-          // 「考え中...」を削除
           const thinkingMsgs = messagesEl.querySelectorAll('.msg.system');
           thinkingMsgs.forEach(m => { if (m.textContent === '考え中...') m.remove(); });
           sendBtn.disabled = false;
           inputEl.disabled = false;
           inputEl.focus();
+          loadSessionList();
+          // タイトル生成（初回メッセージかつ未保存の場合のみ）
+          if (firstUserMessage && !getSessionTitle(wsSessionId)) {
+            generateTitle(wsSessionId, firstUserMessage);
+            firstUserMessage = null;
+          }
           break;
         case 'error':
           addSystemMsg(`エラー: ${data.content}`);
@@ -953,6 +1098,9 @@
     function send() {
       const text = inputEl.value.trim();
       if (!text || !ws || ws.readyState !== WebSocket.OPEN) return;
+
+      // 現セッションの最初のメッセージを記録（タイトル生成用）
+      if (!firstUserMessage) firstUserMessage = text;
 
       addMsg(text, 'user');
       const payload = { type: 'message', content: text };
@@ -974,7 +1122,6 @@
     }
 
     // --- DOM ヘルパー ---
-
     function addMsg(text, cls) {
       const el = document.createElement('div');
       el.className = `msg ${cls}`;
@@ -984,15 +1131,6 @@
       return el;
     }
 
-    function addToolMsg(label, detail) {
-      const el = document.createElement('div');
-      el.className = 'msg tool';
-      el.innerHTML = `<div class="tool-label">${escapeHtml(label)}</div><code>${escapeHtml(detail)}</code>`;
-      messagesEl.appendChild(el);
-      scrollToBottom();
-    }
-
-    // ツールステップの折りたたみ管理
     let currentToolDetails = null;
     let toolStepCount = 0;
 
@@ -1026,8 +1164,6 @@
       }
 
       details.appendChild(step);
-
-      // サマリーを更新
       const summary = details.querySelector('summary');
       summary.textContent = `🔧 ${toolStepCount} ツール実行`;
       scrollToBottom();
@@ -1137,9 +1273,7 @@
       // 段落（空行で分割）
       html = html.replace(/\n\n+/g, '</p><p>');
       html = '<p>' + html + '</p>';
-      // 空の p タグを除去
       html = html.replace(/<p>\s*<\/p>/g, '');
-      // p の中に block 要素がある場合の修正
       html = html.replace(/<p>(<h[1-6]>)/g, '$1');
       html = html.replace(/(<\/h[1-6]>)<\/p>/g, '$1');
       html = html.replace(/<p>(<pre>)/g, '$1');
@@ -1159,7 +1293,6 @@
     }
 
     // --- イベント ---
-
     inputEl.addEventListener('input', () => {
       inputEl.style.height = 'auto';
       inputEl.style.height = Math.min(inputEl.scrollHeight, 120) + 'px';
@@ -1173,138 +1306,7 @@
     });
 
     sendBtn.addEventListener('click', send);
-
-    // 履歴パネル
-    const historyBtn = document.getElementById('history-btn');
-    const historyPanel = document.getElementById('history-panel');
-    const historyClose = document.getElementById('history-close');
-    const historyBody = document.getElementById('history-body');
-    const sessionDisplay = document.getElementById('session-display');
-
-    historyBtn.addEventListener('click', () => {
-      historyPanel.classList.toggle('open');
-      if (historyPanel.classList.contains('open')) loadSessionList();
-    });
-    historyClose.addEventListener('click', () => historyPanel.classList.remove('open'));
-
-    function loadSessionList() {
-      historyBody.innerHTML = '<div style="color:var(--muted-fg);font-size:12px;">読み込み中...</div>';
-      fetch('/provenance')
-        .then(r => r.json())
-        .then(sessions => {
-          if (!sessions.length) {
-            historyBody.innerHTML = '<div style="color:var(--muted-fg);font-size:12px;">記録がありません</div>';
-            return;
-          }
-          let html = '';
-          for (const s of sessions) {
-            const isCurrent = s.session_id === wsSessionId;
-            const time = s.last_at ? new Date(s.last_at).toLocaleString('ja-JP') : '';
-            const shortId = s.session_id.slice(0, 8);
-            html += `<div class="history-item" style="${isCurrent ? 'border-color:var(--primary);' : ''}">
-              <div style="display:flex;justify-content:space-between;align-items:center;">
-                <span class="hi-tool" style="font-family:ui-monospace,'SF Mono',monospace;font-size:11px;cursor:pointer;" data-sid="${escapeHtml(s.session_id)}">${escapeHtml(shortId)}${isCurrent ? ' (現在)' : ''}</span>
-                <span class="hi-time">${escapeHtml(time)}</span>
-              </div>
-              <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;">
-                <span style="font-size:11px;color:var(--muted-fg);">${s.activity_count} アクティビティ</span>
-                ${isCurrent ? '' : `<button class="switch-session-btn" data-sid="${escapeHtml(s.session_id)}" style="font-size:11px;padding:2px 10px;border-radius:var(--radius-lg);border:1px solid var(--primary);background:var(--accent);color:var(--primary);cursor:pointer;font-family:inherit;">切り替え</button>`}
-              </div>
-            </div>`;
-          }
-          historyBody.innerHTML = html;
-
-          // セッション ID クリックで詳細表示
-          historyBody.querySelectorAll('[data-sid].hi-tool').forEach(el => {
-            el.addEventListener('click', () => loadSessionDetail(el.dataset.sid));
-          });
-
-          // 切り替えボタン
-          historyBody.querySelectorAll('.switch-session-btn').forEach(btn => {
-            btn.addEventListener('click', () => switchSession(btn.dataset.sid));
-          });
-        })
-        .catch(() => {
-          historyBody.innerHTML = '<div style="color:var(--muted-fg);font-size:12px;">取得失敗</div>';
-        });
-    }
-
-    function switchSession(sid) {
-      wsSessionId = sid;
-      localStorage.setItem(STORAGE_KEY, wsSessionId);
-      historyPanel.classList.remove('open');
-      messagesEl.innerHTML = '';
-
-      // 過去のメッセージを復元して表示
-      fetch(`/provenance/${sid}`)
-        .then(r => r.json())
-        .then(items => {
-          const agentRuns = items.filter(i => i.type === 'agent_run');
-          if (agentRuns.length) {
-            addSystemMsg(`📂 セッション ${sid.slice(0, 8)} を復元しました（${agentRuns.length} ターン）`);
-            for (const item of agentRuns) {
-              const userMsg = (item.input || {}).message;
-              const agentResp = (item.output || {}).response;
-              if (userMsg) addMsg(userMsg, 'user');
-              if (agentResp) {
-                const el = addMsg('', 'agent');
-                el.innerHTML = renderMarkdown(agentResp);
-              }
-            }
-          }
-          // WebSocket を再接続
-          if (ws) ws.close();
-          connect();
-        })
-        .catch(() => {
-          addSystemMsg(`📂 セッション ${sid.slice(0, 8)} に切り替えました`);
-          if (ws) ws.close();
-          connect();
-        });
-    }
-
-    function loadSessionDetail(sid) {
-      historyBody.innerHTML = '<div style="color:var(--muted-fg);font-size:12px;">読み込み中...</div>';
-      fetch(`/provenance/${sid}`)
-        .then(r => r.json())
-        .then(items => {
-          let html = `<div style="margin-bottom:8px;"><button id="history-back" style="background:none;border:none;color:var(--primary);cursor:pointer;font-size:12px;font-family:inherit;">← セッション一覧</button></div>`;
-          html += `<div style="font-size:11px;color:var(--muted-fg);margin-bottom:10px;font-family:ui-monospace,'SF Mono',monospace;">${escapeHtml(sid)}</div>`;
-          if (!items.length) {
-            html += '<div style="color:var(--muted-fg);font-size:12px;">アクティビティがありません</div>';
-          }
-          for (const item of items) {
-            const typeClass = item.type || '';
-            const time = item.started_at ? new Date(item.started_at).toLocaleString('ja-JP') : '';
-            html += `<div class="history-item">
-              <div class="hi-type ${escapeHtml(typeClass)}">${escapeHtml(item.type || '')}</div>
-              ${item.tool_name ? `<div class="hi-tool">🔧 ${escapeHtml(item.tool_name)}</div>` : ''}
-              <div class="hi-time">${escapeHtml(time)}</div>
-              ${item.input ? `<div class="hi-detail">${escapeHtml(JSON.stringify(item.input))}</div>` : ''}
-            </div>`;
-          }
-          historyBody.innerHTML = html;
-          document.getElementById('history-back')?.addEventListener('click', loadSessionList);
-        })
-        .catch(() => {
-          historyBody.innerHTML = '<div style="color:var(--muted-fg);font-size:12px;">取得失敗</div>';
-        });
-    }
-
-    // 新しいセッション開始
-    function newSession() {
-      wsSessionId = crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36);
-      localStorage.setItem(STORAGE_KEY, wsSessionId);
-      messagesEl.innerHTML = '';
-      if (ws) ws.close();
-      connect();
-    }
-
-    document.getElementById('new-session-btn').addEventListener('click', () => {
-      if (confirm('新しいセッションを開始しますか？現在の会話は履歴に残ります。')) {
-        newSession();
-      }
-    });
+    newChatBtn.addEventListener('click', newSession);
 
     planToggleBtn.addEventListener('click', () => {
       planMode = !planMode;
@@ -1316,28 +1318,9 @@
     loadHealth();
     loadProfiles();
     loadTools();
+    connect();
     setInterval(loadHealth, 30000);
-
-    // ページロード時に現在のセッション履歴を復元してから接続
-    fetch(`/provenance/${wsSessionId}`)
-      .then(r => r.json())
-      .then(items => {
-        const agentRuns = items.filter(i => i.type === 'agent_run');
-        if (agentRuns.length) {
-          addSystemMsg(`📂 セッション ${wsSessionId.slice(0, 8)} を復元しました（${agentRuns.length} ターン）`);
-          for (const item of agentRuns) {
-            const userMsg = (item.input || {}).message;
-            const agentResp = (item.output || {}).response;
-            if (userMsg) addMsg(userMsg, 'user');
-            if (agentResp) {
-              const el = addMsg('', 'agent');
-              el.innerHTML = renderMarkdown(agentResp);
-            }
-          }
-        }
-      })
-      .catch(() => {})
-      .finally(() => connect());
+    setInterval(loadSessionList, 30000);
   </script>
 </body>
 </html>
