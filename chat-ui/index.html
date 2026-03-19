@@ -740,6 +740,7 @@
       <span id="status" class="conn-status disconnected">切断</span>
       <span id="session-display" class="session-id"></span>
       <span class="spacer"></span>
+      <button id="new-session-btn" class="history-btn">＋ 新しいセッション</button>
       <button id="history-btn" class="history-btn">📋 履歴</button>
       <span id="header-info" class="health-summary"></span>
     </header>
@@ -1298,6 +1299,12 @@
       if (ws) ws.close();
       connect();
     }
+
+    document.getElementById('new-session-btn').addEventListener('click', () => {
+      if (confirm('新しいセッションを開始しますか？現在の会話は履歴に残ります。')) {
+        newSession();
+      }
+    });
 
     planToggleBtn.addEventListener('click', () => {
       planMode = !planMode;
