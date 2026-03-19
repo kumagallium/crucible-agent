@@ -16,6 +16,7 @@ RUN uv sync --frozen --no-dev
 
 # Copy application code
 COPY src/ src/
+COPY scripts/ scripts/
 COPY mcp_agent.config.yaml .
 COPY chat-ui/ chat-ui/
 
