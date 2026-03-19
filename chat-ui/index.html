@@ -1095,12 +1095,67 @@
 
     .btn-reject:hover { background: var(--error-bg); }
 
-    /* レスポンシブ */
-    @media (max-width: 900px) {
-      #history-sidebar { display: none; }
+    /* ハンバーガーメニューボタン（モバイルのみ表示） */
+    #sidebar-toggle {
+      display: none;
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--foreground);
+      padding: 4px;
+      line-height: 0;
+      border-radius: var(--radius-lg);
+      transition: background 0.15s;
     }
+    #sidebar-toggle:hover { background: var(--muted); }
+
+    /* サイドバーオーバーレイ背景（モバイルのみ） */
+    #sidebar-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.4);
+      z-index: 399;
+    }
+    #sidebar-overlay.visible { display: block; }
+
+    /* レスポンシブ */
     @media (max-width: 1100px) {
       #right-panel { display: none; }
+    }
+    @media (max-width: 900px) {
+      /* サイドバーをオーバーレイに変更 */
+      #history-sidebar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        z-index: 400;
+        transform: translateX(-100%);
+        transition: transform 0.25s ease;
+        box-shadow: none;
+      }
+      #history-sidebar.open {
+        transform: translateX(0);
+        box-shadow: 4px 0 24px rgba(0,0,0,0.15);
+      }
+
+      /* ハンバーガーボタン表示 */
+      #sidebar-toggle { display: flex; align-items: center; justify-content: center; }
+
+      /* メッセージ幅をモバイル向けに拡大 */
+      .msg { max-width: 90%; }
+      .tool-steps { max-width: 95%; }
+
+      /* 入力エリアのパディング縮小 */
+      #input-area { padding: 10px 12px; }
+      #input-area button { padding: 0 14px; font-size: 13px; }
+
+      /* ヘッダーのパディング縮小 */
+      header { padding: 8px 12px; gap: 6px; }
+
+      /* メッセージエリアのパディング縮小 */
+      #messages { padding: 12px; }
     }
 
     /* ===== プロファイル管理ボタン ===== */
@@ -1457,9 +1512,13 @@
     </div>
   </div>
 
+  <!-- サイドバーオーバーレイ（モバイル） -->
+  <div id="sidebar-overlay"></div>
+
   <!-- ===== 中: チャットエリア ===== -->
   <div id="main">
     <header>
+      <button id="sidebar-toggle" title="メニュー"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="18" y2="18"/></svg></button>
       <span id="status" class="conn-status disconnected">切断</span>
       <span id="session-display" class="session-id"></span>
       <button id="graph-toggle-btn" title="来歴グラフ">
@@ -2973,15 +3032,22 @@
           }
         }
 
-        // wasInfluencedBy エッジ（引用・コピーによるクロスセッション参照）
+        // wasInfluencedBy エッジ（このセッションが参照した外部 Entity のみ）
+        // 他セッションから参照「された」エッジは表示しない
         const sessionEntityIds = new Set(entities.map(en => en.id));
         for (const e of data.edges) {
           if (e.relation === 'wasInfluencedBy' || e.relation === 'wasDerivedFrom') {
-            const src = nodeMap[e.source];
-            const tgt = nodeMap[e.target];
+            const derivedId = e.source;  // 影響を受けた Entity（PROV: derived）
+            const sourceId = e.target;   // 引用元 Entity（PROV: source）
+
+            // このセッションの Entity が参照した場合のみ表示
+            if (!sessionEntityIds.has(derivedId)) continue;
+
+            const src = nodeMap[derivedId];
+            const tgt = nodeMap[sourceId];
             if (src && src.node_type === 'entity' && tgt && tgt.node_type === 'entity') {
               // クロスセッション Entity ノードが未追加なら追加（オレンジ枠で区別）
-              if (!sessionEntityIds.has(tgt.id)) {
+              if (!sessionEntityIds.has(sourceId)) {
                 const isUser = tgt.prov_type === 'user_message';
                 elements.push({
                   data: {
@@ -2997,9 +3063,9 @@
               // 表示: 引用元 → 影響を受けた response（順方向）
               elements.push({
                 data: {
-                  id: `inf-${e.source}-${e.target}`,
-                  source: e.target,
-                  target: e.source,
+                  id: `inf-${derivedId}-${sourceId}`,
+                  source: sourceId,
+                  target: derivedId,
                 },
               });
             }
@@ -3124,6 +3190,26 @@
       else showGraph();
     });
     graphCloseBtn.addEventListener('click', hideGraph);
+
+    // --- モバイル: サイドバー開閉 ---
+    const sidebarToggle = document.getElementById('sidebar-toggle');
+    const sidebarOverlay = document.getElementById('sidebar-overlay');
+    const historySidebar = document.getElementById('history-sidebar');
+
+    function openSidebar() {
+      historySidebar.classList.add('open');
+      sidebarOverlay.classList.add('visible');
+    }
+    function closeSidebar() {
+      historySidebar.classList.remove('open');
+      sidebarOverlay.classList.remove('visible');
+    }
+    sidebarToggle.addEventListener('click', openSidebar);
+    sidebarOverlay.addEventListener('click', closeSidebar);
+
+    // セッション切り替え・新規チャット時にモバイルサイドバーを閉じる
+    sessionListEl.addEventListener('click', () => closeSidebar());
+    newChatBtn.addEventListener('click', () => closeSidebar());
 
     // --- 初期化 ---
     loadHealth();
