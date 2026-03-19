@@ -499,7 +499,7 @@ async def get_provenance_graph(session_id: str) -> dict:
 
     クロスセッションの derivation エッジも含む。
     """
-    from sqlalchemy import or_, select
+    from sqlalchemy import select
 
     nodes: list[dict] = []
     edges: list[dict] = []
@@ -596,15 +596,12 @@ async def get_provenance_graph(session_id: str) -> dict:
                     "role": u.role,
                 })
 
-        # --- prov_derivations (セッション内 + クロスセッション) ---
+        # --- prov_derivations (このセッションから外への参照のみ) ---
+        # derived_entity_id がこのセッションの Entity = このセッションが参照した関係
+        # source_entity_id がこのセッションの Entity = 他セッションから参照された関係（除外）
         deriv_result = await db.execute(
             select(ProvenanceDerivation)
-            .where(
-                or_(
-                    ProvenanceDerivation.derived_entity_id.in_(entity_ids),
-                    ProvenanceDerivation.source_entity_id.in_(entity_ids),
-                )
-            )
+            .where(ProvenanceDerivation.derived_entity_id.in_(entity_ids))
         )
         for d in deriv_result.scalars().all():
             # source が別セッションなら stub ノードとして追加
