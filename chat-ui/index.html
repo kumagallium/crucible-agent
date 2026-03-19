@@ -110,6 +110,9 @@
     }
 
     .session-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
       padding: 8px 10px;
       border-radius: var(--radius-lg);
       cursor: pointer;
@@ -119,6 +122,11 @@
 
     .session-item:hover { background: var(--muted); }
     .session-item.active { background: var(--accent); }
+
+    .session-item .si-content {
+      flex: 1;
+      min-width: 0;
+    }
 
     .session-item .si-title {
       font-size: 13px;
@@ -140,25 +148,64 @@
       margin-top: 1px;
     }
 
-    .session-item .si-row {
-      display: flex;
-      align-items: center;
-      gap: 4px;
+    /* 三点メニューボタン — アイテム全体の上下中央 */
+    .si-menu-wrapper {
+      position: relative;
+      flex-shrink: 0;
     }
-    .session-item .si-title { flex: 1; min-width: 0; }
-    .session-item .si-delete {
+    .session-item .si-menu-btn {
       display: none;
+      align-items: center;
+      justify-content: center;
       background: none;
       border: none;
       cursor: pointer;
       color: var(--muted-fg);
-      font-size: 14px;
-      padding: 0 2px;
-      line-height: 1;
-      flex-shrink: 0;
+      width: 28px;
+      height: 28px;
+      padding: 0;
+      line-height: 0;
+      border-radius: var(--radius-full);
+      transition: color 0.15s, background 0.15s;
     }
-    .session-item .si-delete:hover { color: #e55; }
-    .session-item:hover .si-delete { display: block; }
+    .session-item .si-menu-btn:hover { color: var(--foreground); background: var(--border); }
+    .session-item:hover .si-menu-btn,
+    .session-item .si-menu-btn.open { display: flex; }
+
+    /* ドロップダウンメニュー */
+    .si-dropdown {
+      display: none;
+      position: absolute;
+      right: 0;
+      top: calc(100% + 4px);
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+      min-width: 140px;
+      z-index: 300;
+      padding: 4px;
+    }
+    .si-dropdown.show { display: block; }
+    .si-dropdown-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      padding: 7px 10px;
+      border: none;
+      background: none;
+      cursor: pointer;
+      border-radius: calc(var(--radius-lg) - 2px);
+      color: var(--foreground);
+      font-size: 13px;
+      font-family: inherit;
+      transition: background 0.1s;
+      text-align: left;
+    }
+    .si-dropdown-item:hover { background: var(--muted); }
+    .si-dropdown-item.danger { color: #c53030; }
+    .si-dropdown-item.danger:hover { background: rgba(197,48,48,0.08); }
 
     /* ===== 中: メインエリア ===== */
     #main {
@@ -1639,23 +1686,43 @@
           const title = getSessionTitle(s.session_id) || s.session_id.slice(0, 8);
           const time = s.last_at ? formatTimeAgo(new Date(s.last_at)) : '';
           html += `<div class="session-item${isCurrent ? ' active' : ''}" data-sid="${escapeHtml(s.session_id)}">
-            <div class="si-row">
+            <div class="si-content">
               <div class="si-title">${escapeHtml(title)}</div>
-              <button class="si-delete" data-delete-sid="${escapeHtml(s.session_id)}" title="削除">×</button>
+              <div class="si-time">${escapeHtml(time)}</div>
             </div>
-            <div class="si-time">${escapeHtml(time)}</div>
+            <div class="si-menu-wrapper">
+              <button class="si-menu-btn" title="メニュー"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg></button>
+              <div class="si-dropdown">
+                <button class="si-dropdown-item danger" data-delete-sid="${escapeHtml(s.session_id)}"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>削除</button>
+              </div>
+            </div>
           </div>`;
         }
         sessionListEl.innerHTML = html;
         sessionListEl.querySelectorAll('.session-item[data-sid]').forEach(el => {
           el.addEventListener('click', (e) => {
-            if (e.target.closest('.si-delete')) return;
+            if (e.target.closest('.si-menu-wrapper')) return;
             switchSession(el.dataset.sid);
           });
         });
-        sessionListEl.querySelectorAll('.si-delete[data-delete-sid]').forEach(btn => {
+        // 三点メニュー: クリックでドロップダウン開閉
+        sessionListEl.querySelectorAll('.si-menu-btn').forEach(btn => {
           btn.addEventListener('click', (e) => {
             e.stopPropagation();
+            const dropdown = btn.nextElementSibling;
+            const wasOpen = dropdown.classList.contains('show');
+            closeAllDropdowns();
+            if (!wasOpen) {
+              dropdown.classList.add('show');
+              btn.classList.add('open');
+            }
+          });
+        });
+        // 削除ボタン
+        sessionListEl.querySelectorAll('.si-dropdown-item[data-delete-sid]').forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            closeAllDropdowns();
             deleteSession(btn.dataset.deleteSid);
           });
         });
@@ -1663,6 +1730,13 @@
         sessionListEl.innerHTML = '<div class="session-empty">取得失敗</div>';
       }
     }
+
+    // --- ドロップダウン制御 ---
+    function closeAllDropdowns() {
+      document.querySelectorAll('.si-dropdown.show').forEach(d => d.classList.remove('show'));
+      document.querySelectorAll('.si-menu-btn.open').forEach(b => b.classList.remove('open'));
+    }
+    document.addEventListener('click', () => closeAllDropdowns());
 
     // --- セッション削除 ---
     async function deleteSession(sid) {
@@ -2853,6 +2927,25 @@
                 target: inputId,
               },
             });
+          }
+        }
+
+        // wasInfluencedBy エッジ（引用・コピーによるクロスセッション参照）
+        for (const e of data.edges) {
+          if (e.relation === 'wasInfluencedBy' || e.relation === 'wasDerivedFrom') {
+            const src = nodeMap[e.source];
+            const tgt = nodeMap[e.target];
+            if (src && src.node_type === 'entity' && tgt && tgt.node_type === 'entity') {
+              // source(response) が target(引用元) に影響を受けた
+              // 表示: 引用元 → response（順方向）
+              elements.push({
+                data: {
+                  id: `inf-${e.source}-${e.target}`,
+                  source: e.target,
+                  target: e.source,
+                },
+              });
+            }
           }
         }
 

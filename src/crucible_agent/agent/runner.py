@@ -47,24 +47,29 @@ async def _build_instruction_with_contexts(
     custom_instructions: str | None,
     context_ids: list[str],
 ) -> str:
-    """context_ids の Entity 内容をシステムプロンプトに注入した instruction を構築する"""
+    """instruction を構築する（context_ids は別途メッセージに注入）"""
+    return await build_instruction(profile, custom_instructions)
+
+
+async def _build_context_prefix(context_ids: list[str]) -> str:
+    """context_ids の Entity 内容をユーザーメッセージの前に付与する文字列を構築する"""
     from crucible_agent.provenance.recorder import get_entity
 
-    base = await build_instruction(profile, custom_instructions)
     if not context_ids:
-        return base
+        return ""
 
     context_blocks: list[str] = []
     for entity_id in context_ids:
         entity = await get_entity(entity_id)
         if entity and entity.content:
-            context_blocks.append(f"[引用: {entity_id[:8]}...]\n{entity.content}")
+            context_blocks.append(
+                f"[引用されたメッセージ]\n{entity.content}"
+            )
 
     if not context_blocks:
-        return base
+        return ""
 
-    injected = "\n\n---\n".join(context_blocks)
-    return f"{base}\n\n## 参照文脈（手動引用）\n\n{injected}"
+    return "\n\n".join(context_blocks) + "\n\n---\n\n"
 
 
 async def run_agent(
@@ -119,8 +124,14 @@ async def run_agent_stream(
 ) -> AsyncIterator[StreamEvent]:
     """エージェントを実行し、イベントをストリームする（WebSocket 用）"""
     instruction = instruction or await _build_instruction_with_contexts(
-        profile, custom_instructions, context_ids or []
+        profile, custom_instructions, context_ids or [],
     )
+    # 引用コンテキストをユーザーメッセージに直接付与（LLM が確実に参照するため）
+    context_prefix = await _build_context_prefix(context_ids or [])
+    if context_prefix:
+        message = context_prefix + message
+        logger.info("Context IDs injected into message: %s", context_ids)
+
     server_names, discovered = await _resolve_servers(server_names)
 
     logger.info("Agent stream started (session=%s, plan_mode=%s)", session_id, require_approval)
