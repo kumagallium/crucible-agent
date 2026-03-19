@@ -411,16 +411,21 @@
     .rev-nav button {
       background: none;
       border: none;
+      border-radius: var(--radius-full);
       cursor: pointer;
       color: var(--muted-foreground);
-      padding: 0 1px;
-      font-size: 14px;
+      width: 24px;
+      height: 24px;
+      padding: 0;
+      font-size: 16px;
       line-height: 1;
       display: flex;
       align-items: center;
+      justify-content: center;
+      transition: background 0.15s, color 0.15s;
     }
-    .rev-nav button:hover { color: var(--foreground); }
-    .rev-nav button:disabled { opacity: 0.3; cursor: default; }
+    .rev-nav button:hover { color: var(--foreground); background: var(--muted); }
+    .rev-nav button:disabled { opacity: 0.3; cursor: default; background: none; }
     .rev-nav .rev-label { font-size: 11px; min-width: 28px; text-align: center; color: var(--muted-foreground); }
 
     /* ===== 引用カードエリア ===== */
