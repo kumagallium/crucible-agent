@@ -1429,7 +1429,7 @@
     <div id="citation-area"></div>
 
     <div id="input-area">
-      <textarea id="input" placeholder="メッセージを入力... (Enter で送信)" rows="1"></textarea>
+      <textarea id="input" placeholder="メッセージを入力... (Ctrl+Enter で送信)" rows="1"></textarea>
       <button id="send" disabled>送信</button>
     </div>
   </div>
@@ -2650,7 +2650,7 @@
     });
 
     inputEl.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
         send();
       }
@@ -2784,11 +2784,12 @@
             const src = nodeMap[e.source];
             const tgt = nodeMap[e.target];
             if (src && src.node_type === 'entity' && tgt && tgt.node_type === 'entity') {
+              // PROV: new→original だが、表示は original→new（直感的な順方向）
               elements.push({
                 data: {
-                  id: `rev-${e.source}-${e.target}`,
-                  source: e.source,
-                  target: e.target,
+                  id: `rev-${e.target}-${e.source}`,
+                  source: e.target,
+                  target: e.source,
                   label: '編集',
                   isRevision: 'true',
                 },
