@@ -1652,6 +1652,11 @@
       if (ws) ws.close();
       connect();
 
+      // 来歴グラフが開いていれば再描画
+      if (graphPanel.classList.contains('open')) {
+        showGraph();
+      }
+
       loadSessionList();
     }
 
@@ -2881,12 +2886,9 @@
             positions: (node) => {
               const idx = entities.findIndex(e => e.id === node.id());
               if (idx < 0) return { x: 0, y: 0 };
-              const e = entities[idx];
-              const isUser = e.prov_type === 'user_message';
-              const branch = entityBranch[e.id] || 0;
-              // ブランチごとに右にオフセット（編集分岐を横に展開）
-              const baseX = isUser ? 200 : -200;
-              const x = baseX + branch * 350;
+              const branch = entityBranch[entities[idx].id] || 0;
+              // 同じブランチは同じ列、編集分岐のみ右にオフセット
+              const x = branch * 400;
               const y = idx * 100;
               return { x, y };
             },
