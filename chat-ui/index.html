@@ -399,34 +399,29 @@
       transition-delay: 0.2s;
     }
 
-    /* ===== 編集バージョン切替（ページネーション） ===== */
-    .revision-nav {
-      display: flex;
+    /* ===== 編集バージョン切替（アクションバー内） ===== */
+    .rev-nav {
+      display: inline-flex;
       align-items: center;
-      justify-content: flex-end;
-      gap: 4px;
-      margin: 2px 0 4px;
-      font-size: 12px;
-      color: var(--muted-foreground);
+      gap: 2px;
+      margin-left: 4px;
+      padding-left: 6px;
+      border-left: 1px solid var(--border);
     }
-    .revision-nav button {
+    .rev-nav button {
       background: none;
-      border: 1px solid var(--border);
-      border-radius: var(--radius-full);
-      width: 22px;
-      height: 22px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      border: none;
       cursor: pointer;
       color: var(--muted-foreground);
-      padding: 0;
-      font-size: 13px;
+      padding: 0 1px;
+      font-size: 14px;
       line-height: 1;
+      display: flex;
+      align-items: center;
     }
-    .revision-nav button:hover { background: var(--muted); color: var(--foreground); }
-    .revision-nav button:disabled { opacity: 0.3; cursor: default; }
-    .revision-nav .revision-label { min-width: 30px; text-align: center; }
+    .rev-nav button:hover { color: var(--foreground); }
+    .rev-nav button:disabled { opacity: 0.3; cursor: default; }
+    .rev-nav .rev-label { font-size: 11px; min-width: 28px; text-align: center; color: var(--muted-foreground); }
 
     /* ===== 引用カードエリア ===== */
     #citation-area {
@@ -1640,6 +1635,13 @@
       }
     }
 
+    function createRevNav() {
+      const nav = document.createElement('span');
+      nav.className = 'rev-nav';
+      nav.innerHTML = '<button class="rev-prev">‹</button><span class="rev-label"></span><button class="rev-next">›</button>';
+      return nav;
+    }
+
     function renderBranchedSection(branches) {
       // 各ブランチの DOM を生成
       const branchDivs = branches.map(branchItems => {
@@ -1653,15 +1655,11 @@
       let activeIdx = branches.length - 1;
       branchDivs.forEach((div, i) => { div.style.display = i === activeIdx ? '' : 'none'; });
 
-      // ページネーション
-      const nav = document.createElement('div');
-      nav.className = 'revision-nav';
-      const prevBtn = document.createElement('button');
-      prevBtn.textContent = '‹';
-      const nextBtn = document.createElement('button');
-      nextBtn.textContent = '›';
-      const label = document.createElement('span');
-      label.className = 'revision-label';
+      // ページネーション（アクションバー内に配置）
+      const nav = createRevNav();
+      const prevBtn = nav.querySelector('.rev-prev');
+      const nextBtn = nav.querySelector('.rev-next');
+      const label = nav.querySelector('.rev-label');
 
       function updateNav() {
         label.textContent = `${activeIdx + 1} / ${branches.length}`;
@@ -1669,22 +1667,27 @@
         nextBtn.disabled = activeIdx === branches.length - 1;
       }
 
+      function attachNavToActive() {
+        if (nav.parentNode) nav.remove();
+        const activeDiv = branchDivs[activeIdx];
+        const userActions = activeDiv.querySelector('.msg-wrapper-user .msg-actions');
+        if (userActions) userActions.appendChild(nav);
+      }
+
       function showVersion(idx) {
+        if (nav.parentNode) nav.remove();
         branchDivs.forEach((div, i) => { div.style.display = i === idx ? '' : 'none'; });
         activeIdx = idx;
         updateNav();
+        attachNavToActive();
       }
 
-      prevBtn.addEventListener('click', () => { if (activeIdx > 0) showVersion(activeIdx - 1); });
-      nextBtn.addEventListener('click', () => { if (activeIdx < branches.length - 1) showVersion(activeIdx + 1); });
-      nav.appendChild(prevBtn);
-      nav.appendChild(label);
-      nav.appendChild(nextBtn);
+      prevBtn.addEventListener('click', (e) => { e.stopPropagation(); if (activeIdx > 0) showVersion(activeIdx - 1); });
+      nextBtn.addEventListener('click', (e) => { e.stopPropagation(); if (activeIdx < branches.length - 1) showVersion(activeIdx + 1); });
       updateNav();
 
-      // 各ブランチ div → ナビの順で追加（ナビはユーザーメッセージ群の直下に表示）
       branchDivs.forEach(div => messagesEl.appendChild(div));
-      messagesEl.appendChild(nav);
+      attachNavToActive();
       scrollToBottom();
     }
 
@@ -2428,22 +2431,16 @@
       });
 
       // 既存のナビを削除（再描画）
-      const existingNav = messagesEl.querySelector(`.revision-nav[data-chain="${CSS.escape(originalEntityId)}"]`);
+      const existingNav = messagesEl.querySelector(`.rev-nav[data-chain="${CSS.escape(originalEntityId)}"]`);
       if (existingNav) existingNav.remove();
 
-      // ページネーション UI を作成
+      // ページネーション UI を作成（アクションバー内に配置）
       let activeIdx = chain.length - 1;
-
-      const nav = document.createElement('div');
-      nav.className = 'revision-nav';
+      const nav = createRevNav();
       nav.dataset.chain = originalEntityId;
-
-      const prevBtn = document.createElement('button');
-      prevBtn.textContent = '‹';
-      const nextBtn = document.createElement('button');
-      nextBtn.textContent = '›';
-      const label = document.createElement('span');
-      label.className = 'revision-label';
+      const prevBtn = nav.querySelector('.rev-prev');
+      const nextBtn = nav.querySelector('.rev-next');
+      const label = nav.querySelector('.rev-label');
 
       function updateNav() {
         label.textContent = `${activeIdx + 1} / ${chain.length}`;
@@ -2451,30 +2448,30 @@
         nextBtn.disabled = activeIdx === chain.length - 1;
       }
 
+      function attachNavToActive() {
+        if (nav.parentNode) nav.remove();
+        const activeUserWrapper = chain[activeIdx].userWrapper;
+        if (activeUserWrapper) {
+          const userActions = activeUserWrapper.querySelector('.msg-actions');
+          if (userActions) userActions.appendChild(nav);
+        }
+      }
+
       function showVersion(idx) {
+        if (nav.parentNode) nav.remove();
         chain.forEach((v, i) => {
           if (v.userWrapper) v.userWrapper.style.display = i === idx ? '' : 'none';
           if (v.agentWrapper) v.agentWrapper.style.display = i === idx ? '' : 'none';
         });
         activeIdx = idx;
         updateNav();
+        attachNavToActive();
       }
 
-      prevBtn.addEventListener('click', () => { if (activeIdx > 0) showVersion(activeIdx - 1); });
-      nextBtn.addEventListener('click', () => { if (activeIdx < chain.length - 1) showVersion(activeIdx + 1); });
-
-      nav.appendChild(prevBtn);
-      nav.appendChild(label);
-      nav.appendChild(nextBtn);
+      prevBtn.addEventListener('click', (e) => { e.stopPropagation(); if (activeIdx > 0) showVersion(activeIdx - 1); });
+      nextBtn.addEventListener('click', (e) => { e.stopPropagation(); if (activeIdx < chain.length - 1) showVersion(activeIdx + 1); });
       updateNav();
-
-      // 最新版のエージェント wrapper の後（または ユーザー wrapper の後）にナビを挿入
-      const latestAgent = chain[activeIdx].agentWrapper;
-      const latestUser = chain[activeIdx].userWrapper;
-      const insertAfter = latestAgent || latestUser;
-      if (insertAfter && insertAfter.parentNode) {
-        insertAfter.parentNode.insertBefore(nav, insertAfter.nextSibling);
-      }
+      attachNavToActive();
     }
 
     // --- 編集モーダル ---
