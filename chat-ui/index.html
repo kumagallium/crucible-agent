@@ -2726,7 +2726,7 @@
         const activityOutput = {};  // activity_id → entity_id (agent_response)
 
         for (const e of data.edges) {
-          if (e.relation === 'used') {
+          if (e.relation === 'used' && (!e.role || e.role === 'input')) {
             const target = nodeMap[e.target];
             if (target && target.node_type === 'entity') activityInput[e.source] = e.target;
           }

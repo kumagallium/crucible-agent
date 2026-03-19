@@ -41,6 +41,7 @@ async def record_agent_run(
     llm_model_id: str | None = None,
     llm_model_version: str | None = None,
     context_ids: list[str] | None = None,
+    edit_from_entity_id: str | None = None,
 ) -> dict:
     """エージェント実行の来歴を記録する
 
@@ -98,14 +99,31 @@ async def record_agent_run(
         ))
 
         # prov:used — 前ターンの agent_response をコンテキストとして使った
-        prev_response = await db.execute(
-            select(ProvenanceEntity)
-            .where(ProvenanceEntity.session_id == session_id)
-            .where(ProvenanceEntity.type == "agent_response")
-            .order_by(ProvenanceEntity.created_at.desc())
-            .limit(1)
-        )
-        prev_resp_entity = prev_response.scalar_one_or_none()
+        # 編集時: edit_from_entity_id の直前の response を使う
+        if edit_from_entity_id:
+            # 編集元 Entity の作成時刻より前の最新 response を取得
+            edit_entity = await db.get(ProvenanceEntity, edit_from_entity_id)
+            if edit_entity:
+                prev_response = await db.execute(
+                    select(ProvenanceEntity)
+                    .where(ProvenanceEntity.session_id == session_id)
+                    .where(ProvenanceEntity.type == "agent_response")
+                    .where(ProvenanceEntity.created_at < edit_entity.created_at)
+                    .order_by(ProvenanceEntity.created_at.desc())
+                    .limit(1)
+                )
+                prev_resp_entity = prev_response.scalar_one_or_none()
+            else:
+                prev_resp_entity = None
+        else:
+            prev_response = await db.execute(
+                select(ProvenanceEntity)
+                .where(ProvenanceEntity.session_id == session_id)
+                .where(ProvenanceEntity.type == "agent_response")
+                .order_by(ProvenanceEntity.created_at.desc())
+                .limit(1)
+            )
+            prev_resp_entity = prev_response.scalar_one_or_none()
         if prev_resp_entity:
             db.add(ProvenanceUsage(
                 activity_id=activity.id,

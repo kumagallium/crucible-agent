@@ -453,6 +453,7 @@ async def agent_ws(websocket: WebSocket, session_id: str | None = None) -> None:
                         agent_response=collected_text,
                         tool_calls=collected_tools,
                         context_ids=context_ids or None,
+                        edit_from_entity_id=edit_from_entity_id,
                     )
                     # 編集モードの場合、wasRevisionOf を記録
                     if edit_from_entity_id:
