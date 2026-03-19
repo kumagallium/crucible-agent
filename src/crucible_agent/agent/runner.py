@@ -48,7 +48,7 @@ async def run_agent(
 ) -> dict:
     """エージェントを実行して結果を返す（同期版）"""
     session_id = session_id or str(uuid.uuid4())
-    instruction = instruction or build_instruction(profile, custom_instructions)
+    instruction = instruction or await build_instruction(profile, custom_instructions)
     server_names, discovered = await _resolve_servers(server_names)
 
     logger.info("Agent run started (session=%s)", session_id)
@@ -82,7 +82,7 @@ async def run_agent_stream(
     approval_callback: ApprovalCallback | None = None,
 ) -> AsyncIterator[StreamEvent]:
     """エージェントを実行し、イベントをストリームする（WebSocket 用）"""
-    instruction = instruction or build_instruction(profile, custom_instructions)
+    instruction = instruction or await build_instruction(profile, custom_instructions)
     server_names, discovered = await _resolve_servers(server_names)
 
     logger.info("Agent stream started (session=%s, plan_mode=%s)", session_id, require_approval)

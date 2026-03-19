@@ -55,14 +55,46 @@ class AgentRunResponse(BaseModel):
     token_usage: TokenUsage = Field(default_factory=TokenUsage)
 
 
-# --- GET /profiles ---
+# --- /profiles CRUD ---
+
+
+class ProfileCreate(BaseModel):
+    """POST /profiles リクエスト"""
+
+    name: str = Field(..., description="プロファイル名（一意）")
+    description: str = Field(default="", description="説明文")
+    content: str = Field(..., description="システムプロンプト本文（Markdown）")
+
+
+class ProfileUpdate(BaseModel):
+    """PUT /profiles/{id} リクエスト"""
+
+    name: str | None = Field(default=None, description="プロファイル名")
+    description: str | None = Field(default=None, description="説明文")
+    content: str | None = Field(default=None, description="システムプロンプト本文（Markdown）")
+
+
+class ProfileResponse(BaseModel):
+    """プロファイル詳細レスポンス"""
+
+    id: str
+    name: str
+    description: str
+    content: str
+    created_at: str
+    updated_at: str
+
+    model_config = {"from_attributes": True}
 
 
 class ProfileInfo(BaseModel):
-    """プロファイル情報"""
+    """プロファイル一覧用（簡易情報）"""
 
+    id: str
     name: str
     description: str = ""
+
+    model_config = {"from_attributes": True}
 
 
 class ProfilesResponse(BaseModel):

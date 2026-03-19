@@ -8,7 +8,7 @@ import logging
 import uuid
 
 import httpx
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 
 from crucible_agent import __version__
 from crucible_agent.agent.runner import run_agent, run_agent_stream
@@ -16,8 +16,11 @@ from crucible_agent.api.schemas import (
     AgentRunRequest,
     AgentRunResponse,
     HealthResponse,
+    ProfileCreate,
     ProfileInfo,
+    ProfileResponse,
     ProfilesResponse,
+    ProfileUpdate,
     TokenUsage,
     ToolInfo,
     ToolSourceInfo,
@@ -25,7 +28,13 @@ from crucible_agent.api.schemas import (
 )
 from crucible_agent.config import settings
 from crucible_agent.crucible.discovery import discover_servers
-from crucible_agent.prompts.loader import list_profiles
+from crucible_agent.profiles.repository import (
+    create_profile,
+    delete_profile,
+    get_profile,
+    list_profiles,
+    update_profile,
+)
 from crucible_agent.provenance.recorder import get_session_history, list_sessions, record_agent_run
 
 logger = logging.getLogger(__name__)
@@ -92,10 +101,62 @@ async def tools() -> ToolsResponse:
 
 
 @router.get("/profiles", response_model=ProfilesResponse)
-async def profiles() -> ProfilesResponse:
-    """利用可能なプロンプトプロファイル一覧を返す"""
-    return ProfilesResponse(
-        profiles=[ProfileInfo(name=p) for p in list_profiles()]
+async def profiles_list() -> ProfilesResponse:
+    """プロファイル一覧を返す"""
+    items = await list_profiles()
+    return ProfilesResponse(profiles=[ProfileInfo.model_validate(p) for p in items])
+
+
+@router.post("/profiles", response_model=ProfileResponse, status_code=201)
+async def profiles_create(req: ProfileCreate) -> ProfileResponse:
+    """プロファイルを作成する"""
+    profile = await create_profile(
+        name=req.name,
+        description=req.description,
+        content=req.content,
+    )
+    return _to_profile_response(profile)
+
+
+@router.get("/profiles/{profile_id}", response_model=ProfileResponse)
+async def profiles_get(profile_id: str) -> ProfileResponse:
+    """プロファイル詳細を返す"""
+    profile = await get_profile(profile_id)
+    if profile is None:
+        raise HTTPException(status_code=404, detail="Profile not found")
+    return _to_profile_response(profile)
+
+
+@router.put("/profiles/{profile_id}", response_model=ProfileResponse)
+async def profiles_update(profile_id: str, req: ProfileUpdate) -> ProfileResponse:
+    """プロファイルを更新する"""
+    profile = await update_profile(
+        profile_id=profile_id,
+        name=req.name,
+        description=req.description,
+        content=req.content,
+    )
+    if profile is None:
+        raise HTTPException(status_code=404, detail="Profile not found")
+    return _to_profile_response(profile)
+
+
+@router.delete("/profiles/{profile_id}", status_code=204)
+async def profiles_delete(profile_id: str) -> None:
+    """プロファイルを削除する"""
+    deleted = await delete_profile(profile_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Profile not found")
+
+
+def _to_profile_response(profile) -> ProfileResponse:
+    return ProfileResponse(
+        id=profile.id,
+        name=profile.name,
+        description=profile.description,
+        content=profile.content,
+        created_at=profile.created_at.isoformat(),
+        updated_at=profile.updated_at.isoformat(),
     )
 
 

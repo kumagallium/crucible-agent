@@ -16,6 +16,7 @@ for mod in [
         sys.modules[mod] = MagicMock()
 
 import pytest
+from types import SimpleNamespace
 from fastapi.testclient import TestClient
 
 from crucible_agent.crucible.discovery import DiscoveredServer
@@ -183,23 +184,69 @@ class TestToolsEndpoint:
 
 
 class TestProfilesEndpoint:
-    @patch("crucible_agent.api.routes.list_profiles")
+    @patch("crucible_agent.api.routes.list_profiles", new_callable=AsyncMock)
     def test_returns_profiles(self, mock_list, client):
-        mock_list.return_value = ["general", "science", "code"]
+        p1 = SimpleNamespace(id="id-1", name="general", description="汎用")
+        p2 = SimpleNamespace(id="id-2", name="science", description="科学")
+        mock_list.return_value = [p1, p2]
 
         resp = client.get("/profiles")
         assert resp.status_code == 200
         data = resp.json()
         names = [p["name"] for p in data["profiles"]]
-        assert names == ["general", "science", "code"]
+        assert "general" in names
+        assert "science" in names
 
-    @patch("crucible_agent.api.routes.list_profiles")
+    @patch("crucible_agent.api.routes.list_profiles", new_callable=AsyncMock)
     def test_empty_profiles(self, mock_list, client):
         mock_list.return_value = []
 
         resp = client.get("/profiles")
         assert resp.status_code == 200
         assert resp.json()["profiles"] == []
+
+    @patch("crucible_agent.api.routes.create_profile", new_callable=AsyncMock)
+    def test_create_profile(self, mock_create, client):
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc)
+        mock_create.return_value = SimpleNamespace(
+            id="new-id",
+            name="custom",
+            description="カスタム",
+            content="## Custom\nHello",
+            created_at=now,
+            updated_at=now,
+        )
+
+        resp = client.post(
+            "/profiles",
+            json={"name": "custom", "description": "カスタム", "content": "## Custom\nHello"},
+        )
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data["id"] == "new-id"
+        assert data["name"] == "custom"
+
+    @patch("crucible_agent.api.routes.get_profile", new_callable=AsyncMock)
+    def test_get_profile_not_found(self, mock_get, client):
+        mock_get.return_value = None
+
+        resp = client.get("/profiles/nonexistent-id")
+        assert resp.status_code == 404
+
+    @patch("crucible_agent.api.routes.delete_profile", new_callable=AsyncMock)
+    def test_delete_profile(self, mock_delete, client):
+        mock_delete.return_value = True
+
+        resp = client.delete("/profiles/some-id")
+        assert resp.status_code == 204
+
+    @patch("crucible_agent.api.routes.delete_profile", new_callable=AsyncMock)
+    def test_delete_profile_not_found(self, mock_delete, client):
+        mock_delete.return_value = False
+
+        resp = client.delete("/profiles/nonexistent-id")
+        assert resp.status_code == 404
 
 
 class TestAgentRunEndpoint:

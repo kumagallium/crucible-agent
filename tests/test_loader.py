@@ -1,82 +1,59 @@
 import pytest
+from unittest.mock import AsyncMock, MagicMock, patch
 
-from crucible_agent.prompts.loader import (
-    BASE_PROMPT,
-    TEMPLATES_DIR,
-    build_instruction,
-    list_profiles,
-    load_profile,
-)
-
-
-class TestListProfiles:
-    def test_returns_directory_names(self, tmp_path, monkeypatch):
-        (tmp_path / "alpha").mkdir()
-        (tmp_path / "beta").mkdir()
-        monkeypatch.setattr("crucible_agent.prompts.loader.TEMPLATES_DIR", tmp_path)
-        result = list_profiles()
-        assert result == ["alpha", "beta"]
-
-    def test_excludes_dot_dirs(self, tmp_path, monkeypatch):
-        (tmp_path / ".hidden").mkdir()
-        (tmp_path / "visible").mkdir()
-        monkeypatch.setattr("crucible_agent.prompts.loader.TEMPLATES_DIR", tmp_path)
-        result = list_profiles()
-        assert result == ["visible"]
-
-    def test_returns_empty_when_no_templates(self, tmp_path, monkeypatch):
-        monkeypatch.setattr("crucible_agent.prompts.loader.TEMPLATES_DIR", tmp_path / "nonexistent")
-        result = list_profiles()
-        assert result == []
-
-    def test_excludes_files(self, tmp_path, monkeypatch):
-        (tmp_path / "profile_dir").mkdir()
-        (tmp_path / "readme.md").write_text("not a dir")
-        monkeypatch.setattr("crucible_agent.prompts.loader.TEMPLATES_DIR", tmp_path)
-        result = list_profiles()
-        assert result == ["profile_dir"]
-
-
-class TestLoadProfile:
-    def test_existing_profile(self, tmp_path, monkeypatch):
-        profile_dir = tmp_path / "science"
-        profile_dir.mkdir()
-        (profile_dir / "01_intro.md").write_text("Science intro")
-        monkeypatch.setattr("crucible_agent.prompts.loader.TEMPLATES_DIR", tmp_path)
-        result = load_profile("science")
-        assert result.startswith(BASE_PROMPT)
-        assert "Science intro" in result
-
-    def test_nonexistent_profile_returns_base(self, tmp_path, monkeypatch):
-        monkeypatch.setattr("crucible_agent.prompts.loader.TEMPLATES_DIR", tmp_path)
-        result = load_profile("nonexistent")
-        assert result == BASE_PROMPT
+from crucible_agent.prompts.loader import BASE_PROMPT, build_instruction
 
 
 class TestBuildInstruction:
-    def test_no_args_returns_base(self):
-        result = build_instruction()
+    @pytest.mark.asyncio
+    async def test_no_args_returns_base(self):
+        result = await build_instruction()
         assert result == BASE_PROMPT
 
-    def test_with_profile(self, tmp_path, monkeypatch):
-        profile_dir = tmp_path / "general"
-        profile_dir.mkdir()
-        (profile_dir / "system.md").write_text("General prompt")
-        monkeypatch.setattr("crucible_agent.prompts.loader.TEMPLATES_DIR", tmp_path)
-        result = build_instruction(profile="general")
-        assert "General prompt" in result
-
-    def test_with_custom_instructions(self):
-        result = build_instruction(custom_instructions="Always respond in Japanese")
+    @pytest.mark.asyncio
+    async def test_with_custom_instructions_only(self):
+        result = await build_instruction(custom_instructions="Always respond in Japanese")
         assert result.startswith(BASE_PROMPT)
         assert "## Additional Instructions" in result
         assert "Always respond in Japanese" in result
 
-    def test_with_profile_and_custom(self, tmp_path, monkeypatch):
-        profile_dir = tmp_path / "test"
-        profile_dir.mkdir()
-        (profile_dir / "base.md").write_text("Test profile")
-        monkeypatch.setattr("crucible_agent.prompts.loader.TEMPLATES_DIR", tmp_path)
-        result = build_instruction(profile="test", custom_instructions="Be brief")
-        assert "Test profile" in result
+    @pytest.mark.asyncio
+    async def test_with_profile_found_by_id(self):
+        mock_profile = MagicMock(id="test-id", name="general", content="## General\nHello from DB")
+        with (
+            patch("crucible_agent.profiles.repository.get_profile", new_callable=AsyncMock, return_value=mock_profile),
+            patch("crucible_agent.profiles.repository.get_profile_by_name", new_callable=AsyncMock),
+        ):
+            result = await build_instruction(profile="test-id")
+        assert BASE_PROMPT in result
+        assert "Hello from DB" in result
+
+    @pytest.mark.asyncio
+    async def test_with_profile_found_by_name(self):
+        mock_profile = MagicMock(id="test-id", name="general", content="## General\nFound by name")
+        with (
+            patch("crucible_agent.profiles.repository.get_profile", new_callable=AsyncMock, return_value=None),
+            patch("crucible_agent.profiles.repository.get_profile_by_name", new_callable=AsyncMock, return_value=mock_profile),
+        ):
+            result = await build_instruction(profile="general")
+        assert "Found by name" in result
+
+    @pytest.mark.asyncio
+    async def test_with_profile_not_found_returns_base(self):
+        with (
+            patch("crucible_agent.profiles.repository.get_profile", new_callable=AsyncMock, return_value=None),
+            patch("crucible_agent.profiles.repository.get_profile_by_name", new_callable=AsyncMock, return_value=None),
+        ):
+            result = await build_instruction(profile="nonexistent")
+        assert result == BASE_PROMPT
+
+    @pytest.mark.asyncio
+    async def test_with_profile_and_custom_instructions(self):
+        mock_profile = MagicMock(id="test-id", name="test", content="Profile content")
+        with (
+            patch("crucible_agent.profiles.repository.get_profile", new_callable=AsyncMock, return_value=mock_profile),
+            patch("crucible_agent.profiles.repository.get_profile_by_name", new_callable=AsyncMock),
+        ):
+            result = await build_instruction(profile="test-id", custom_instructions="Be brief")
+        assert "Profile content" in result
         assert "Be brief" in result

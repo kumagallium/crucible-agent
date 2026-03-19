@@ -108,10 +108,11 @@ class TestToolInfo:
 
 class TestProfileInfo:
     def test_construction(self):
-        p = ProfileInfo(name="science")
+        p = ProfileInfo(id="test-id", name="science")
+        assert p.id == "test-id"
         assert p.name == "science"
         assert p.description == ""
 
     def test_with_description(self):
-        p = ProfileInfo(name="general", description="General profile")
+        p = ProfileInfo(id="test-id", name="general", description="General profile")
         assert p.description == "General profile"
