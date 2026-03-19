@@ -2767,14 +2767,23 @@
           }
         }
 
+        // wasRevisionOf の対象を先に収集（ターン間接続から除外するため）
+        const revisionTargets = new Set();  // 編集先（new entity）の ID
+        for (const e of data.edges) {
+          if (e.relation === 'wasRevisionOf') revisionTargets.add(e.source);
+        }
+
         // ターン間エッジ: agent_response → 次の user_message（時系列順で接続）
+        // ただし、次の user_message が wasRevisionOf の対象（編集後）なら接続しない
         for (let i = 0; i < entities.length - 1; i++) {
           const curr = entities[i];
           const next = entities[i + 1];
           if (curr.prov_type === 'agent_response' && next.prov_type === 'user_message') {
-            elements.push({
-              data: { id: `seq-${i}`, source: curr.id, target: next.id, label: '' },
-            });
+            if (!revisionTargets.has(next.id)) {
+              elements.push({
+                data: { id: `seq-${i}`, source: curr.id, target: next.id, label: '' },
+              });
+            }
           }
         }
 
