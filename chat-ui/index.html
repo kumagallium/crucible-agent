@@ -502,35 +502,53 @@
     .rev-nav button:disabled { opacity: 0.3; cursor: default; background: none; }
     .rev-nav .rev-label { font-size: 11px; min-width: 28px; text-align: center; color: var(--muted-foreground); }
 
-    /* ===== 来歴グラフパネル ===== */
-    #graph-panel {
-      display: none;
-      position: absolute;
-      top: 0; left: 0; right: 0; bottom: 0;
-      background: var(--background);
-      z-index: 200;
-      flex-direction: column;
-    }
-    #graph-panel.open { display: flex; }
-    #graph-header {
+    /* ===== ヘッダータブ切り替え ===== */
+    .header-tabs {
       display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 12px 20px;
-      border-bottom: 1px solid var(--border);
-      background: var(--card);
+      gap: 2px;
+      background: var(--muted);
+      border-radius: var(--radius-lg);
+      padding: 2px;
     }
-    #graph-header h3 { margin: 0; font-size: 14px; font-weight: 600; }
-    #graph-close-btn {
+    .header-tab {
       background: none;
-      border: 1px solid var(--border);
-      border-radius: var(--radius-full);
+      border: none;
       cursor: pointer;
       padding: 4px 12px;
       font-size: 12px;
-      color: var(--muted-foreground);
+      font-weight: 500;
+      font-family: inherit;
+      color: var(--muted-fg);
+      border-radius: calc(var(--radius-lg) - 2px);
+      transition: all 0.15s;
+      display: flex;
+      align-items: center;
+      gap: 5px;
     }
-    #graph-close-btn:hover { background: var(--muted); color: var(--foreground); }
+    .header-tab:hover { color: var(--foreground); }
+    .header-tab.active {
+      background: var(--card);
+      color: var(--foreground);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+
+    /* ===== 来歴グラフパネル ===== */
+    #graph-panel {
+      display: none;
+      flex: 1;
+      flex-direction: column;
+      background: var(--background);
+      overflow: hidden;
+    }
+    #graph-panel.open { display: flex; }
+    /* チャットコンテンツ */
+    #chat-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+    #chat-content.hidden { display: none; }
     #graph-container { flex: 1; }
     #graph-legend {
       display: flex;
@@ -548,17 +566,6 @@
       border-radius: 50%;
       border: 1px solid rgba(0,0,0,0.15);
     }
-    #graph-toggle-btn {
-      background: none;
-      border: 1px solid var(--border);
-      border-radius: var(--radius-full);
-      cursor: pointer;
-      padding: 4px 10px;
-      font-size: 12px;
-      color: var(--muted-foreground);
-      margin-left: 8px;
-    }
-    #graph-toggle-btn:hover { background: var(--muted); color: var(--foreground); }
 
     /* ===== 引用カードエリア ===== */
     #citation-area {
@@ -1519,21 +1526,35 @@
   <div id="main">
     <header>
       <button id="sidebar-toggle" title="メニュー"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="18" y2="18"/></svg></button>
-      <span id="status" class="conn-status disconnected">切断</span>
-      <span id="session-display" class="session-id"></span>
-      <button id="graph-toggle-btn" title="来歴グラフ">
-        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><circle cx="18" cy="6" r="3"/><line x1="6" x2="18" y1="9" y2="15"/><line x1="18" x2="6" y1="9" y2="15"/></svg>
-        来歴
-      </button>
+      <div class="header-tabs">
+        <button class="header-tab active" id="tab-chat">チャット</button>
+        <button class="header-tab" id="tab-graph"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><circle cx="18" cy="6" r="3"/><line x1="6" x2="18" y1="9" y2="15"/><line x1="18" x2="6" y1="9" y2="15"/></svg>来歴</button>
+      </div>
       <span class="spacer"></span>
+      <span id="session-display" class="session-id"></span>
+      <span id="status" class="conn-status disconnected">切断</span>
     </header>
+
+    <!-- チャットコンテンツ -->
+    <div id="chat-content">
+      <div id="messages"></div>
+
+      <div id="paste-banner">
+        <span>📋 引用をクリップボードに保持中</span>
+        <button id="paste-apply-btn">この会話に貼り付け</button>
+        <button id="paste-discard-btn" title="破棄">✕</button>
+      </div>
+
+      <div id="citation-area"></div>
+
+      <div id="input-area">
+        <textarea id="input" placeholder="メッセージを入力... (Ctrl+Enter で送信)" rows="1"></textarea>
+        <button id="send" disabled>送信</button>
+      </div>
+    </div>
 
     <!-- 来歴グラフパネル -->
     <div id="graph-panel">
-      <div id="graph-header">
-        <h3>来歴グラフ（PROV-DM）</h3>
-        <button id="graph-close-btn">閉じる</button>
-      </div>
       <div id="graph-container"></div>
       <div id="graph-legend">
         <span class="legend-item"><span class="legend-dot" style="background:#4B7A52"></span> ユーザー</span>
@@ -1541,21 +1562,6 @@
         <span class="legend-item"><span class="legend-dot" style="background:#dbeafe"></span> ツール結果</span>
         <span class="legend-item" style="margin-left:12px">→ 会話の流れ</span>
       </div>
-    </div>
-
-    <div id="messages"></div>
-
-    <div id="paste-banner">
-      <span>📋 引用をクリップボードに保持中</span>
-      <button id="paste-apply-btn">この会話に貼り付け</button>
-      <button id="paste-discard-btn" title="破棄">✕</button>
-    </div>
-
-    <div id="citation-area"></div>
-
-    <div id="input-area">
-      <textarea id="input" placeholder="メッセージを入力... (Ctrl+Enter で送信)" rows="1"></textarea>
-      <button id="send" disabled>送信</button>
     </div>
   </div>
 
@@ -2903,8 +2909,9 @@
     // --- 来歴グラフ ---
     const graphPanel = document.getElementById('graph-panel');
     const graphContainer = document.getElementById('graph-container');
-    const graphToggleBtn = document.getElementById('graph-toggle-btn');
-    const graphCloseBtn = document.getElementById('graph-close-btn');
+    const chatContent = document.getElementById('chat-content');
+    const tabChat = document.getElementById('tab-chat');
+    const tabGraph = document.getElementById('tab-graph');
     let cyInstance = null;
 
     const PROV_COLORS = {
@@ -2937,6 +2944,7 @@
     async function showGraph() {
       if (!wsSessionId) return;
       graphPanel.classList.add('open');
+      chatContent.classList.add('hidden');
 
       try {
         const resp = await fetch(`/provenance/${wsSessionId}/graph`);
@@ -2966,9 +2974,9 @@
           }
         }
 
-        // Entity ノードのみ抽出（時系列順）
+        // このセッションの Entity のみ抽出（クロスセッション stub を除外）
         const entities = data.nodes
-          .filter(n => n.node_type === 'entity')
+          .filter(n => n.node_type === 'entity' && n.session_id === wsSessionId)
           .sort((a, b) => (a.created_at || '').localeCompare(b.created_at || ''));
 
         const elements = [];
@@ -3183,13 +3191,20 @@
 
     function hideGraph() {
       graphPanel.classList.remove('open');
+      chatContent.classList.remove('hidden');
+      tabChat.classList.add('active');
+      tabGraph.classList.remove('active');
     }
 
-    graphToggleBtn.addEventListener('click', () => {
-      if (graphPanel.classList.contains('open')) hideGraph();
-      else showGraph();
-    });
-    graphCloseBtn.addEventListener('click', hideGraph);
+    function switchToGraph() {
+      chatContent.classList.add('hidden');
+      tabGraph.classList.add('active');
+      tabChat.classList.remove('active');
+      showGraph();
+    }
+
+    tabChat.addEventListener('click', hideGraph);
+    tabGraph.addEventListener('click', switchToGraph);
 
     // --- モバイル: サイドバー開閉 ---
     const sidebarToggle = document.getElementById('sidebar-toggle');
