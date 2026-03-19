@@ -701,6 +701,345 @@
     @media (max-width: 1100px) {
       #right-panel { display: none; }
     }
+
+    /* ===== プロファイル管理ボタン ===== */
+    .profile-manage-btn {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--primary);
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 3px 10px;
+      cursor: pointer;
+      font-family: inherit;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+
+    .profile-manage-btn:hover {
+      background: var(--muted);
+      border-color: var(--primary);
+    }
+
+    .profile-title-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 11px 16px 6px;
+    }
+
+    .profile-title-row .rp-title {
+      padding: 0;
+    }
+
+    /* ===== プロファイル管理モーダル ===== */
+    #profile-modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.4);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #profile-modal-overlay.open {
+      display: flex;
+    }
+
+    #profile-modal {
+      background: var(--card);
+      border-radius: var(--radius-xl);
+      border: 1px solid var(--border);
+      width: 560px;
+      max-width: calc(100vw - 32px);
+      max-height: calc(100vh - 48px);
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+      overflow: hidden;
+    }
+
+    .pm-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .pm-header h2 {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--foreground);
+    }
+
+    .pm-close-btn {
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      color: var(--muted-fg);
+      font-size: 18px;
+      line-height: 1;
+      padding: 4px;
+      border-radius: var(--radius-lg);
+      transition: all 0.2s;
+      font-family: inherit;
+    }
+
+    .pm-close-btn:hover {
+      background: var(--muted);
+      color: var(--foreground);
+    }
+
+    .pm-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px 20px;
+    }
+
+    /* 一覧ビュー */
+    .pm-list-header {
+      display: flex;
+      justify-content: flex-end;
+      margin-bottom: 12px;
+    }
+
+    .pm-new-btn {
+      background: var(--primary);
+      color: var(--primary-fg);
+      border: none;
+      border-radius: var(--radius-lg);
+      padding: 7px 14px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      font-family: inherit;
+      transition: background 0.2s;
+    }
+
+    .pm-new-btn:hover { background: #3d6844; }
+
+    .pm-profile-card {
+      background: var(--background);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-xl);
+      padding: 12px 14px;
+      margin-bottom: 8px;
+      transition: box-shadow 0.2s;
+    }
+
+    .pm-profile-card:hover {
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+    }
+
+    .pm-card-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .pm-card-info { flex: 1; min-width: 0; }
+
+    .pm-card-name {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--foreground);
+    }
+
+    .pm-card-desc {
+      font-size: 12px;
+      color: var(--muted-fg);
+      margin-top: 3px;
+    }
+
+    .pm-card-actions {
+      display: flex;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+
+    .pm-edit-btn, .pm-delete-btn {
+      font-size: 12px;
+      font-weight: 500;
+      padding: 4px 12px;
+      border-radius: var(--radius-lg);
+      cursor: pointer;
+      font-family: inherit;
+      transition: all 0.2s;
+      border: 1px solid;
+    }
+
+    .pm-edit-btn {
+      background: var(--card);
+      color: var(--foreground);
+      border-color: var(--border);
+    }
+
+    .pm-edit-btn:hover {
+      background: var(--muted);
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+
+    .pm-delete-btn {
+      background: var(--card);
+      color: var(--error-fg);
+      border-color: var(--error-border);
+    }
+
+    .pm-delete-btn:hover {
+      background: var(--error-bg);
+    }
+
+    /* 削除確認インライン */
+    .pm-delete-confirm {
+      margin-top: 10px;
+      background: var(--error-bg);
+      border: 1px solid var(--error-border);
+      border-radius: var(--radius-lg);
+      padding: 10px 12px;
+      display: none;
+    }
+
+    .pm-delete-confirm.visible { display: block; }
+
+    .pm-delete-confirm p {
+      font-size: 12px;
+      color: var(--error-fg);
+      margin-bottom: 8px;
+    }
+
+    .pm-delete-confirm-actions {
+      display: flex;
+      gap: 6px;
+    }
+
+    .pm-confirm-yes-btn {
+      font-size: 12px;
+      font-weight: 500;
+      padding: 4px 14px;
+      border-radius: var(--radius-lg);
+      cursor: pointer;
+      font-family: inherit;
+      background: var(--error-fg);
+      color: #fff;
+      border: none;
+      transition: opacity 0.2s;
+    }
+
+    .pm-confirm-yes-btn:hover { opacity: 0.85; }
+
+    .pm-confirm-no-btn {
+      font-size: 12px;
+      font-weight: 500;
+      padding: 4px 12px;
+      border-radius: var(--radius-lg);
+      cursor: pointer;
+      font-family: inherit;
+      background: var(--card);
+      color: var(--foreground);
+      border: 1px solid var(--border);
+      transition: background 0.2s;
+    }
+
+    .pm-confirm-no-btn:hover { background: var(--muted); }
+
+    .pm-empty {
+      text-align: center;
+      color: var(--muted-fg);
+      font-size: 13px;
+      padding: 32px 0;
+    }
+
+    /* 編集/作成フォーム */
+    .pm-form-group {
+      margin-bottom: 16px;
+    }
+
+    .pm-form-group label {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--muted-fg);
+      display: block;
+      margin-bottom: 6px;
+    }
+
+    .pm-form-group input,
+    .pm-form-group textarea {
+      width: 100%;
+      background: var(--background);
+      color: var(--foreground);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 8px 12px;
+      font-size: 13px;
+      font-family: inherit;
+      transition: border-color 0.2s;
+    }
+
+    .pm-form-group input:focus,
+    .pm-form-group textarea:focus {
+      outline: none;
+      border-color: var(--ring);
+      box-shadow: 0 0 0 2px rgba(75, 122, 82, 0.15);
+    }
+
+    .pm-form-group textarea {
+      resize: vertical;
+      min-height: 300px;
+      line-height: 1.6;
+    }
+
+    .pm-form-actions {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+      margin-top: 4px;
+    }
+
+    .pm-save-btn {
+      background: var(--primary);
+      color: var(--primary-fg);
+      border: none;
+      border-radius: var(--radius-lg);
+      padding: 8px 20px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      font-family: inherit;
+      transition: background 0.2s;
+    }
+
+    .pm-save-btn:hover { background: #3d6844; }
+    .pm-save-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .pm-cancel-btn {
+      background: var(--card);
+      color: var(--foreground);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 8px 16px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      font-family: inherit;
+      transition: background 0.2s;
+    }
+
+    .pm-cancel-btn:hover { background: var(--muted); }
+
+    .pm-form-error {
+      font-size: 12px;
+      color: var(--error-fg);
+      margin-top: 8px;
+      display: none;
+    }
+
+    .pm-form-error.visible { display: block; }
   </style>
 </head>
 <body>
@@ -744,7 +1083,10 @@
 
     <!-- プロファイル設定 -->
     <div class="rp-section">
-      <div class="rp-title">Profile</div>
+      <div class="profile-title-row">
+        <div class="rp-title">Profile</div>
+        <button id="profile-manage-btn" class="profile-manage-btn">管理</button>
+      </div>
       <div class="rp-body">
         <select id="profile">
           <option value="">デフォルト</option>
@@ -776,6 +1118,19 @@
       </div>
     </div>
 
+  </div>
+
+  <!-- ===== プロファイル管理モーダル ===== -->
+  <div id="profile-modal-overlay">
+    <div id="profile-modal">
+      <div class="pm-header">
+        <h2 id="pm-modal-title">プロファイル管理</h2>
+        <button class="pm-close-btn" id="pm-close-btn" title="閉じる">✕</button>
+      </div>
+      <div class="pm-body" id="pm-body">
+        <!-- 一覧ビュー / フォームビューを JS で切り替え -->
+      </div>
+    </div>
   </div>
 
   <script>
@@ -948,6 +1303,9 @@
     }
 
     function loadProfiles() {
+      const currentVal = profileEl.value;
+      // デフォルト option だけ残してクリア
+      while (profileEl.options.length > 1) profileEl.remove(1);
       fetch('/profiles')
         .then(r => r.json())
         .then(data => {
@@ -957,6 +1315,8 @@
             opt.textContent = p.name;
             profileEl.appendChild(opt);
           });
+          // 以前選択していた値を復元
+          if (currentVal) profileEl.value = currentVal;
         })
         .catch(() => {});
     }
@@ -1290,6 +1650,189 @@
       html = html.replace(/(<\/blockquote>)<\/p>/g, '$1');
 
       return html;
+    }
+
+    // --- プロファイル管理モーダル ---
+    const profileModalOverlay = document.getElementById('profile-modal-overlay');
+    const pmBody = document.getElementById('pm-body');
+    const pmModalTitle = document.getElementById('pm-modal-title');
+    const pmCloseBtn = document.getElementById('pm-close-btn');
+    const profileManageBtn = document.getElementById('profile-manage-btn');
+
+    function openProfileModal() {
+      profileModalOverlay.classList.add('open');
+      renderProfileList();
+    }
+
+    function closeProfileModal() {
+      profileModalOverlay.classList.remove('open');
+    }
+
+    profileManageBtn.addEventListener('click', openProfileModal);
+    pmCloseBtn.addEventListener('click', closeProfileModal);
+    profileModalOverlay.addEventListener('click', (e) => {
+      if (e.target === profileModalOverlay) closeProfileModal();
+    });
+
+    async function renderProfileList() {
+      pmModalTitle.textContent = 'プロファイル管理';
+      pmBody.innerHTML = '<div style="color:var(--muted-fg);font-size:13px;text-align:center;padding:24px 0;">読み込み中...</div>';
+      let profiles = [];
+      try {
+        const data = await fetch('/profiles').then(r => r.json());
+        profiles = data.profiles || [];
+      } catch {
+        pmBody.innerHTML = '<div style="color:var(--error-fg);font-size:13px;text-align:center;padding:24px 0;">取得に失敗しました</div>';
+        return;
+      }
+
+      let html = '<div class="pm-list-header"><button class="pm-new-btn" id="pm-new-btn">＋ 新規作成</button></div>';
+      if (profiles.length === 0) {
+        html += '<div class="pm-empty">プロファイルがありません</div>';
+      } else {
+        for (const p of profiles) {
+          html += `
+          <div class="pm-profile-card" data-id="${escapeHtml(String(p.id))}">
+            <div class="pm-card-top">
+              <div class="pm-card-info">
+                <div class="pm-card-name">${escapeHtml(p.name)}</div>
+                ${p.description ? `<div class="pm-card-desc">${escapeHtml(p.description)}</div>` : ''}
+              </div>
+              <div class="pm-card-actions">
+                <button class="pm-edit-btn" data-id="${escapeHtml(String(p.id))}" data-name="${escapeHtml(p.name)}">編集</button>
+                <button class="pm-delete-btn" data-id="${escapeHtml(String(p.id))}" data-name="${escapeHtml(p.name)}">削除</button>
+              </div>
+            </div>
+            <div class="pm-delete-confirm" id="pm-del-confirm-${escapeHtml(String(p.id))}">
+              <p>「${escapeHtml(p.name)}」を削除しますか？この操作は元に戻せません。</p>
+              <div class="pm-delete-confirm-actions">
+                <button class="pm-confirm-yes-btn" data-id="${escapeHtml(String(p.id))}">削除する</button>
+                <button class="pm-confirm-no-btn" data-id="${escapeHtml(String(p.id))}">キャンセル</button>
+              </div>
+            </div>
+          </div>`;
+        }
+      }
+      pmBody.innerHTML = html;
+
+      document.getElementById('pm-new-btn').addEventListener('click', () => renderProfileForm(null));
+
+      pmBody.querySelectorAll('.pm-edit-btn').forEach(btn => {
+        btn.addEventListener('click', () => renderProfileForm(btn.dataset.id));
+      });
+
+      pmBody.querySelectorAll('.pm-delete-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const confirmEl = document.getElementById(`pm-del-confirm-${btn.dataset.id}`);
+          if (confirmEl) confirmEl.classList.add('visible');
+        });
+      });
+
+      pmBody.querySelectorAll('.pm-confirm-no-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const confirmEl = document.getElementById(`pm-del-confirm-${btn.dataset.id}`);
+          if (confirmEl) confirmEl.classList.remove('visible');
+        });
+      });
+
+      pmBody.querySelectorAll('.pm-confirm-yes-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          btn.disabled = true;
+          btn.textContent = '削除中...';
+          try {
+            await fetch(`/profiles/${btn.dataset.id}`, { method: 'DELETE' });
+          } catch {}
+          loadProfiles();
+          renderProfileList();
+        });
+      });
+    }
+
+    async function renderProfileForm(profileId) {
+      const isNew = (profileId === null);
+      pmModalTitle.textContent = isNew ? '新規プロファイル作成' : 'プロファイルを編集';
+
+      let name = '', description = '', content = '';
+
+      if (!isNew) {
+        pmBody.innerHTML = '<div style="color:var(--muted-fg);font-size:13px;text-align:center;padding:24px 0;">読み込み中...</div>';
+        try {
+          const data = await fetch(`/profiles/${profileId}`).then(r => r.json());
+          name = data.name || '';
+          description = data.description || '';
+          content = data.content || '';
+        } catch {
+          pmBody.innerHTML = '<div style="color:var(--error-fg);font-size:13px;text-align:center;padding:24px 0;">取得に失敗しました</div>';
+          return;
+        }
+      }
+
+      pmBody.innerHTML = `
+        <div class="pm-form-group">
+          <label for="pm-field-name">名前 <span style="color:var(--error-fg)">*</span></label>
+          <input type="text" id="pm-field-name" placeholder="プロファイル名" value="${escapeHtml(name)}">
+        </div>
+        <div class="pm-form-group">
+          <label for="pm-field-desc">説明</label>
+          <input type="text" id="pm-field-desc" placeholder="このプロファイルの説明（任意）" value="${escapeHtml(description)}">
+        </div>
+        <div class="pm-form-group">
+          <label for="pm-field-content">プロンプト本文 <span style="color:var(--error-fg)">*</span></label>
+          <textarea id="pm-field-content" placeholder="システムプロンプトの内容を入力...">${escapeHtml(content)}</textarea>
+        </div>
+        <div class="pm-form-error" id="pm-form-error"></div>
+        <div class="pm-form-actions">
+          <button class="pm-cancel-btn" id="pm-form-cancel">キャンセル</button>
+          <button class="pm-save-btn" id="pm-form-save">保存</button>
+        </div>`;
+
+      document.getElementById('pm-form-cancel').addEventListener('click', () => renderProfileList());
+
+      document.getElementById('pm-form-save').addEventListener('click', async () => {
+        const nameVal = document.getElementById('pm-field-name').value.trim();
+        const descVal = document.getElementById('pm-field-desc').value.trim();
+        const contentVal = document.getElementById('pm-field-content').value.trim();
+        const errorEl = document.getElementById('pm-form-error');
+        const saveBtn = document.getElementById('pm-form-save');
+
+        if (!nameVal) {
+          errorEl.textContent = '名前は必須です';
+          errorEl.classList.add('visible');
+          return;
+        }
+        if (!contentVal) {
+          errorEl.textContent = 'プロンプト本文は必須です';
+          errorEl.classList.add('visible');
+          return;
+        }
+        errorEl.classList.remove('visible');
+
+        saveBtn.disabled = true;
+        saveBtn.textContent = '保存中...';
+
+        try {
+          if (isNew) {
+            await fetch('/profiles', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ name: nameVal, description: descVal, content: contentVal }),
+            });
+          } else {
+            await fetch(`/profiles/${profileId}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ name: nameVal, description: descVal, content: contentVal }),
+            });
+          }
+          loadProfiles();
+          renderProfileList();
+        } catch (err) {
+          errorEl.textContent = '保存に失敗しました。もう一度お試しください。';
+          errorEl.classList.add('visible');
+          saveBtn.disabled = false;
+          saveBtn.textContent = '保存';
+        }
+      });
     }
 
     // --- イベント ---
