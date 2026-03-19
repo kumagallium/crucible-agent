@@ -58,6 +58,7 @@ async def run_agent(
         message=message,
         server_names=server_names,
         discovered_servers=discovered,
+        session_id=session_id,
     )
 
     logger.info("Agent run completed (session=%s)", session_id)
@@ -91,6 +92,7 @@ async def run_agent_stream(
         message=message,
         server_names=server_names,
         discovered_servers=discovered,
+        session_id=session_id,
         require_approval=require_approval,
         approval_callback=approval_callback,
     ):

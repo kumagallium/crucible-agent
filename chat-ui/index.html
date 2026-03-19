@@ -1200,23 +1200,65 @@
             const isCurrent = s.session_id === wsSessionId;
             const time = s.last_at ? new Date(s.last_at).toLocaleString('ja-JP') : '';
             const shortId = s.session_id.slice(0, 8);
-            html += `<div class="history-item" style="cursor:pointer;${isCurrent ? 'border-color:var(--primary);' : ''}" data-sid="${escapeHtml(s.session_id)}">
+            html += `<div class="history-item" style="${isCurrent ? 'border-color:var(--primary);' : ''}">
               <div style="display:flex;justify-content:space-between;align-items:center;">
-                <span class="hi-tool" style="font-family:ui-monospace,'SF Mono',monospace;font-size:11px;">${escapeHtml(shortId)}${isCurrent ? ' (現在)' : ''}</span>
+                <span class="hi-tool" style="font-family:ui-monospace,'SF Mono',monospace;font-size:11px;cursor:pointer;" data-sid="${escapeHtml(s.session_id)}">${escapeHtml(shortId)}${isCurrent ? ' (現在)' : ''}</span>
                 <span class="hi-time">${escapeHtml(time)}</span>
               </div>
-              <div style="font-size:11px;color:var(--muted-fg);margin-top:2px;">${s.activity_count} アクティビティ</div>
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;">
+                <span style="font-size:11px;color:var(--muted-fg);">${s.activity_count} アクティビティ</span>
+                ${isCurrent ? '' : `<button class="switch-session-btn" data-sid="${escapeHtml(s.session_id)}" style="font-size:11px;padding:2px 10px;border-radius:var(--radius-lg);border:1px solid var(--primary);background:var(--accent);color:var(--primary);cursor:pointer;font-family:inherit;">切り替え</button>`}
+              </div>
             </div>`;
           }
           historyBody.innerHTML = html;
 
-          // クリックでセッション詳細を表示
-          historyBody.querySelectorAll('.history-item[data-sid]').forEach(el => {
+          // セッション ID クリックで詳細表示
+          historyBody.querySelectorAll('[data-sid].hi-tool').forEach(el => {
             el.addEventListener('click', () => loadSessionDetail(el.dataset.sid));
+          });
+
+          // 切り替えボタン
+          historyBody.querySelectorAll('.switch-session-btn').forEach(btn => {
+            btn.addEventListener('click', () => switchSession(btn.dataset.sid));
           });
         })
         .catch(() => {
           historyBody.innerHTML = '<div style="color:var(--muted-fg);font-size:12px;">取得失敗</div>';
+        });
+    }
+
+    function switchSession(sid) {
+      wsSessionId = sid;
+      localStorage.setItem(STORAGE_KEY, wsSessionId);
+      historyPanel.classList.remove('open');
+      messagesEl.innerHTML = '';
+
+      // 過去のメッセージを復元して表示
+      fetch(`/provenance/${sid}`)
+        .then(r => r.json())
+        .then(items => {
+          const agentRuns = items.filter(i => i.type === 'agent_run');
+          if (agentRuns.length) {
+            addSystemMsg(`📂 セッション ${sid.slice(0, 8)} を復元しました（${agentRuns.length} ターン）`);
+            for (const item of agentRuns) {
+              const userMsg = (item.input || {}).message;
+              const agentResp = (item.output || {}).response;
+              if (userMsg) addMsg(userMsg, 'user');
+              if (agentResp) {
+                const el = addMsg('', 'agent');
+                el.innerHTML = renderMarkdown(agentResp);
+              }
+            }
+          }
+          // WebSocket を再接続
+          if (ws) ws.close();
+          connect();
+        })
+        .catch(() => {
+          addSystemMsg(`📂 セッション ${sid.slice(0, 8)} に切り替えました`);
+          if (ws) ws.close();
+          connect();
         });
     }
 

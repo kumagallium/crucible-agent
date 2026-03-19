@@ -163,6 +163,7 @@ async def run(
     message: str,
     server_names: list[str] | None = None,
     discovered_servers: list[DiscoveredServer] | None = None,
+    session_id: str | None = None,
     max_turns: int = 10,
 ) -> AdapterResult:
     """エージェントを実行する（同期版）"""
@@ -171,8 +172,18 @@ async def run(
     async with AsyncExitStack() as stack:
         sessions, tools = await _connect_servers(servers, stack)
 
+        # 過去の会話履歴を復元
+        history: list[dict] = []
+        if session_id:
+            from crucible_agent.provenance.recorder import get_conversation_history
+            try:
+                history = await get_conversation_history(session_id)
+            except Exception:
+                logger.warning("会話履歴の読み込みに失敗しました (session=%s)", session_id)
+
         messages = [
             {"role": "system", "content": instruction},
+            *history,
             {"role": "user", "content": message},
         ]
 
@@ -237,6 +248,7 @@ async def run_stream(
     message: str,
     server_names: list[str] | None = None,
     discovered_servers: list[DiscoveredServer] | None = None,
+    session_id: str | None = None,
     require_approval: bool = False,
     approval_callback: ApprovalCallback | None = None,
     max_turns: int = 10,
@@ -247,8 +259,18 @@ async def run_stream(
     async with AsyncExitStack() as stack:
         sessions, tools = await _connect_servers(servers, stack)
 
+        # 過去の会話履歴を復元
+        history: list[dict] = []
+        if session_id:
+            from crucible_agent.provenance.recorder import get_conversation_history
+            try:
+                history = await get_conversation_history(session_id)
+            except Exception:
+                logger.warning("会話履歴の読み込みに失敗しました (session=%s)", session_id)
+
         messages = [
             {"role": "system", "content": instruction},
+            *history,
             {"role": "user", "content": message},
         ]
 

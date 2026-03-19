@@ -119,6 +119,29 @@ async def list_sessions() -> list[dict]:
         ]
 
 
+async def get_conversation_history(session_id: str) -> list[dict]:
+    """セッションの会話履歴を LLM messages 形式で返す（履歴復元用）"""
+    from sqlalchemy import select
+
+    async with _session_factory() as db:
+        result = await db.execute(
+            select(ProvenanceActivity)
+            .where(ProvenanceActivity.session_id == session_id)
+            .where(ProvenanceActivity.type == "agent_run")
+            .order_by(ProvenanceActivity.started_at)
+        )
+        activities = result.scalars().all()
+        messages = []
+        for a in activities:
+            user_msg = (a.input_data or {}).get("message", "")
+            agent_resp = (a.output_data or {}).get("response", "")
+            if user_msg:
+                messages.append({"role": "user", "content": user_msg})
+            if agent_resp:
+                messages.append({"role": "assistant", "content": agent_resp})
+        return messages
+
+
 async def get_session_history(session_id: str) -> list[dict]:
     """セッションの来歴を取得する"""
     from sqlalchemy import select
