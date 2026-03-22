@@ -2,8 +2,15 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Crucible Agent</title>
+  <!-- PWA -->
+  <link rel="manifest" href="/chat-ui/manifest.json">
+  <meta name="theme-color" content="#4B7A52">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Crucible">
+  <link rel="apple-touch-icon" href="/chat-ui/icons/icon-192.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
@@ -1165,6 +1172,11 @@
 
       /* メッセージエリアのパディング縮小 */
       #messages { padding: 12px; }
+
+      /* iOS Safari 自動ズーム防止: 16px 未満の入力欄はズームされる */
+      input, textarea, select {
+        font-size: 16px !important;
+      }
     }
 
     /* ===== プロファイル管理ボタン ===== */
@@ -3495,6 +3507,11 @@
     connect();
     setInterval(loadHealth, 30000);
     setInterval(loadSessionList, 30000);
+
+    // Service Worker 登録（PWA「ホームに追加」用）
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
+    }
   </script>
 </body>
 </html>

@@ -1,0 +1,22 @@
+{
+  "name": "Crucible Agent",
+  "short_name": "Crucible",
+  "description": "AI agent runtime connecting frontends to MCP servers via LLM",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fafdf7",
+  "theme_color": "#4B7A52",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/chat-ui/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/chat-ui/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
