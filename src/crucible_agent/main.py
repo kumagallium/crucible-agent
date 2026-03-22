@@ -49,4 +49,13 @@ if CHAT_UI_DIR.exists():
     async def chat_ui():
         return FileResponse(CHAT_UI_DIR / "index.html")
 
+    # Service Worker をルートスコープで配信（PWA 用）
+    @app.get("/sw.js", include_in_schema=False)
+    async def service_worker():
+        return FileResponse(
+            CHAT_UI_DIR / "sw.js",
+            media_type="application/javascript",
+            headers={"Service-Worker-Allowed": "/"},
+        )
+
     app.mount("/chat-ui", StaticFiles(directory=str(CHAT_UI_DIR)), name="chat-ui")
