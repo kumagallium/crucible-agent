@@ -45,6 +45,7 @@ class _TestSettings(BaseSettings):
     llm_retry_base_delay: float = 0.01
     llm_max_context_messages: int = 40
     approval_timeout: int = 5
+    cors_origins: str = "*"
     mcp_config_path: str = "/tmp/mcp.yaml"
 
     model_config = {"env_file": None, "extra": "ignore"}

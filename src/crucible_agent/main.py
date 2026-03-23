@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -36,6 +37,16 @@ app = FastAPI(
     description="AI agent runtime connecting frontends to MCP servers via LLM",
     version=__version__,
     lifespan=lifespan,
+)
+
+# CORS: 外部フロントエンド（provnote 等）からの API アクセスを許可
+_origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # gzip 圧縮: 500バイト以上のレスポンスを自動圧縮（モバイル回線の高速化）
