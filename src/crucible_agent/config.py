@@ -22,6 +22,15 @@ class Settings(BaseSettings):
     agent_port: int = 8090
     log_level: str = "info"
 
+    # --- LLM Robustness ---
+    llm_timeout: int = 120  # LLM API タイムアウト（秒）
+    llm_max_retries: int = 3  # リトライ回数
+    llm_retry_base_delay: float = 1.0  # リトライ初回待機（秒、exponential backoff）
+    llm_max_context_messages: int = 40  # 会話履歴の最大メッセージ数（system 除く）
+
+    # --- Plan Mode ---
+    approval_timeout: int = 300  # 承認待ちタイムアウト（秒）
+
     # --- mcp-agent ---
     mcp_config_path: str = "mcp_agent.config.yaml"
 

@@ -40,6 +40,11 @@ class _TestSettings(BaseSettings):
     database_url: str = "sqlite+aiosqlite:///test.db"
     agent_port: int = 9999
     log_level: str = "debug"
+    llm_timeout: int = 10
+    llm_max_retries: int = 1
+    llm_retry_base_delay: float = 0.01
+    llm_max_context_messages: int = 40
+    approval_timeout: int = 5
     mcp_config_path: str = "/tmp/mcp.yaml"
 
     model_config = {"env_file": None, "extra": "ignore"}

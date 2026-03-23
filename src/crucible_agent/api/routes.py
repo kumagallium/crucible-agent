@@ -113,16 +113,19 @@ async def models_list() -> dict:
             model_info = m.get("model_info", {})
             litellm_params = m.get("litellm_params", {})
             raw_model = litellm_params.get("model", "")
-            model_list.append({
-                "id": model_info.get("id", model_name),
-                "name": model_name,
-                "provider": raw_model.split("/")[0] if "/" in raw_model else "unknown",
-                "model_id": raw_model,
-                "supports_function_calling": litellm_params.get(
-                    "supports_function_calling", False,
-                ),
-                "db_model": model_info.get("db_model", False),
-            })
+            model_list.append(
+                {
+                    "id": model_info.get("id", model_name),
+                    "name": model_name,
+                    "provider": raw_model.split("/")[0] if "/" in raw_model else "unknown",
+                    "model_id": raw_model,
+                    "supports_function_calling": litellm_params.get(
+                        "supports_function_calling",
+                        False,
+                    ),
+                    "db_model": model_info.get("db_model", False),
+                }
+            )
 
         return {"models": model_list, "default": settings.llm_model}
     except Exception:
@@ -364,8 +367,7 @@ async def generate_session_title(req: _SessionTitleRequest) -> dict:
                     "role": "user",
                     "content": (
                         "次のメッセージを15文字以内の簡潔なタイトルにしてください。"
-                        "タイトルのみを返してください。\n\n"
-                        + req.first_message[:300]
+                        "タイトルのみを返してください。\n\n" + req.first_message[:300]
                     ),
                 }
             ],
@@ -380,7 +382,7 @@ async def generate_session_title(req: _SessionTitleRequest) -> dict:
             )
             resp.raise_for_status()
             data = resp.json()
-            title = data["choices"][0]["message"]["content"].strip().strip('"\'「」')
+            title = data["choices"][0]["message"]["content"].strip().strip("\"'「」")
             return {"title": title}
     except Exception:
         logger.warning("Title generation failed", exc_info=True)
@@ -419,8 +421,7 @@ async def session_branch(session_id: str, req: BranchRequest) -> BranchResponse:
     # 履歴を instruction に追加して新セッションでエージェントを実行
     # history を「前の会話」として adapter に渡すため custom_instructions に埋め込む
     history_text = "\n".join(
-        f"{'User' if m['role'] == 'user' else 'Assistant'}: {m['content']}"
-        for m in history
+        f"{'User' if m['role'] == 'user' else 'Assistant'}: {m['content']}" for m in history
     )
     custom_instructions = f"## 引き継いだ会話履歴\n\n{history_text}"
 
@@ -500,11 +501,16 @@ async def agent_ws(websocket: WebSocket, session_id: str | None = None) -> None:
     incoming: asyncio.Queue[dict] = asyncio.Queue()
 
     async def approval_callback(tool_call_id: str, tool_name: str, tool_input: dict) -> bool:
-        """ツール実行前にユーザーの承認を待つ"""
+        """ツール実行前にユーザーの承認を待つ（タイムアウト付き）"""
         loop = asyncio.get_event_loop()
         future: asyncio.Future[bool] = loop.create_future()
         pending_approvals[tool_call_id] = future
-        return await future
+        try:
+            return await asyncio.wait_for(future, timeout=settings.approval_timeout)
+        except TimeoutError:
+            pending_approvals.pop(tool_call_id, None)
+            logger.warning("承認タイムアウト (tool=%s, id=%s)", tool_name, tool_call_id)
+            return False
 
     async def receive_loop():
         """WebSocket からのメッセージを常時受信してキューに入れる"""
@@ -573,23 +579,27 @@ async def agent_ws(websocket: WebSocket, session_id: str | None = None) -> None:
                     if event.type == "text_delta":
                         collected_text += event.content
                     elif event.type == "tool_end" and not event.output.get("rejected"):
-                        collected_tools.append({
+                        collected_tools.append(
+                            {
+                                "tool_name": event.tool_name,
+                                "input": event.input,
+                                "output": event.output,
+                                "duration_ms": event.duration_ms,
+                            }
+                        )
+
+                    await websocket.send_json(
+                        {
+                            "type": event.type,
+                            "content": event.content,
+                            "tool_call_id": event.tool_call_id,
                             "tool_name": event.tool_name,
                             "input": event.input,
                             "output": event.output,
                             "duration_ms": event.duration_ms,
-                        })
-
-                    await websocket.send_json({
-                        "type": event.type,
-                        "content": event.content,
-                        "tool_call_id": event.tool_call_id,
-                        "tool_name": event.tool_name,
-                        "input": event.input,
-                        "output": event.output,
-                        "duration_ms": event.duration_ms,
-                        "token_usage": event.token_usage,
-                    })
+                            "token_usage": event.token_usage,
+                        }
+                    )
 
                 # PROV-DM 記録
                 try:
@@ -609,13 +619,15 @@ async def agent_ws(websocket: WebSocket, session_id: str | None = None) -> None:
                         )
 
                     # フロントエンドが entity_id を DOM に保存できるよう通知
-                    await websocket.send_json({
-                        "type": "entity_recorded",
-                        "user_entity_id": ws_run_result["user_entity_id"],
-                        "response_entity_id": ws_run_result["response_entity_id"],
-                        "edit_from_entity_id": edit_from_entity_id,
-                        "session_id": session_id,
-                    })
+                    await websocket.send_json(
+                        {
+                            "type": "entity_recorded",
+                            "user_entity_id": ws_run_result["user_entity_id"],
+                            "response_entity_id": ws_run_result["response_entity_id"],
+                            "edit_from_entity_id": edit_from_entity_id,
+                            "session_id": session_id,
+                        }
+                    )
                 except Exception:
                     logger.warning("Provenance recording failed (WS)", exc_info=True)
 
