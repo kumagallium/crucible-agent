@@ -3,16 +3,18 @@
 from __future__ import annotations
 
 import asyncio
+import hmac
 import json
 import logging
 import uuid
 
 import httpx
-from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
 from crucible_agent import __version__
 from crucible_agent.agent.runner import run_agent, run_agent_stream
+from crucible_agent.api.auth import verify_api_key
 from crucible_agent.api.schemas import (
     AgentRunRequest,
     AgentRunResponse,
@@ -53,10 +55,17 @@ from crucible_agent.provenance.recorder import (
 )
 
 logger = logging.getLogger(__name__)
+
+# /health は認証不要（監視ツール・ロードバランサー対応）
+_public_router = APIRouter()
+# その他のエンドポイントは API キー認証を要求
+_authed_router = APIRouter(dependencies=[Depends(verify_api_key)])
+
+# 外部に公開する統合ルーター
 router = APIRouter()
 
 
-@router.get("/health", response_model=HealthResponse)
+@_public_router.get("/health", response_model=HealthResponse)
 async def health() -> HealthResponse:
     """ヘルスチェック — 各コンポーネントの状態を返す"""
     components: dict[str, str] = {"agent": "ok"}
@@ -95,7 +104,7 @@ def _litellm_headers() -> dict[str, str]:
     }
 
 
-@router.get("/models")
+@_authed_router.get("/models")
 async def models_list() -> dict:
     """LiteLLM に登録されたモデル一覧を返す"""
     try:
@@ -167,7 +176,7 @@ class _ModelCreateRequest(BaseModel):
     api_base: str | None = None
 
 
-@router.post("/models", status_code=201)
+@_authed_router.post("/models", status_code=201)
 async def models_create(req: _ModelCreateRequest) -> dict:
     """LiteLLM にモデルを動的に追加する"""
     prefix = _PROVIDER_PREFIX.get(req.provider, f"{req.provider}/")
@@ -205,7 +214,7 @@ class _ModelDeleteRequest(BaseModel):
     id: str
 
 
-@router.delete("/models", status_code=200)
+@_authed_router.delete("/models", status_code=200)
 async def models_delete(req: _ModelDeleteRequest) -> dict:
     """LiteLLM からモデルを削除する"""
     try:
@@ -224,7 +233,7 @@ async def models_delete(req: _ModelDeleteRequest) -> dict:
         )
 
 
-@router.get("/tools", response_model=ToolsResponse)
+@_authed_router.get("/tools", response_model=ToolsResponse)
 async def tools() -> ToolsResponse:
     """Crucible から検出した利用可能ツール一覧を返す"""
     servers = await discover_servers()
@@ -252,14 +261,14 @@ async def tools() -> ToolsResponse:
     return ToolsResponse(tools=tool_list, sources=sources)
 
 
-@router.get("/profiles", response_model=ProfilesResponse)
+@_authed_router.get("/profiles", response_model=ProfilesResponse)
 async def profiles_list() -> ProfilesResponse:
     """プロファイル一覧を返す"""
     items = await list_profiles()
     return ProfilesResponse(profiles=[ProfileInfo.model_validate(p) for p in items])
 
 
-@router.post("/profiles", response_model=ProfileResponse, status_code=201)
+@_authed_router.post("/profiles", response_model=ProfileResponse, status_code=201)
 async def profiles_create(req: ProfileCreate) -> ProfileResponse:
     """プロファイルを作成する"""
     profile = await create_profile(
@@ -270,7 +279,7 @@ async def profiles_create(req: ProfileCreate) -> ProfileResponse:
     return _to_profile_response(profile)
 
 
-@router.get("/profiles/{profile_id}", response_model=ProfileResponse)
+@_authed_router.get("/profiles/{profile_id}", response_model=ProfileResponse)
 async def profiles_get(profile_id: str) -> ProfileResponse:
     """プロファイル詳細を返す"""
     profile = await get_profile(profile_id)
@@ -279,7 +288,7 @@ async def profiles_get(profile_id: str) -> ProfileResponse:
     return _to_profile_response(profile)
 
 
-@router.put("/profiles/{profile_id}", response_model=ProfileResponse)
+@_authed_router.put("/profiles/{profile_id}", response_model=ProfileResponse)
 async def profiles_update(profile_id: str, req: ProfileUpdate) -> ProfileResponse:
     """プロファイルを更新する"""
     profile = await update_profile(
@@ -293,7 +302,7 @@ async def profiles_update(profile_id: str, req: ProfileUpdate) -> ProfileRespons
     return _to_profile_response(profile)
 
 
-@router.delete("/profiles/{profile_id}", status_code=204)
+@_authed_router.delete("/profiles/{profile_id}", status_code=204)
 async def profiles_delete(profile_id: str) -> None:
     """プロファイルを削除する"""
     deleted = await delete_profile(profile_id)
@@ -312,7 +321,7 @@ def _to_profile_response(profile) -> ProfileResponse:
     )
 
 
-@router.post("/agent/run", response_model=AgentRunResponse)
+@_authed_router.post("/agent/run", response_model=AgentRunResponse)
 async def agent_run(req: AgentRunRequest) -> AgentRunResponse:
     """エージェントを同期実行し結果を返す"""
     result = await run_agent(
@@ -353,7 +362,7 @@ class _SessionTitleRequest(BaseModel):
     first_message: str
 
 
-@router.post("/sessions/title")
+@_authed_router.post("/sessions/title")
 async def generate_session_title(req: _SessionTitleRequest) -> dict:
     """最初のユーザーメッセージから AI セッションタイトルを生成する"""
     try:
@@ -391,7 +400,7 @@ async def generate_session_title(req: _SessionTitleRequest) -> dict:
         return {"title": short + ("..." if len(req.first_message.strip()) > 25 else "")}
 
 
-@router.get("/entities/{entity_id}", response_model=EntityResponse)
+@_authed_router.get("/entities/{entity_id}", response_model=EntityResponse)
 async def entity_get(entity_id: str) -> EntityResponse:
     """Entity を取得する（引用カード描画用）"""
     entity = await get_entity(entity_id)
@@ -406,7 +415,7 @@ async def entity_get(entity_id: str) -> EntityResponse:
     )
 
 
-@router.post("/sessions/{session_id}/branch", response_model=BranchResponse)
+@_authed_router.post("/sessions/{session_id}/branch", response_model=BranchResponse)
 async def session_branch(session_id: str, req: BranchRequest) -> BranchResponse:
     """セッションを指定 Entity で分岐し、新セッションでエージェントを実行する"""
     # 分岐元の履歴を分岐点 Entity まで取得
@@ -458,19 +467,19 @@ async def session_branch(session_id: str, req: BranchRequest) -> BranchResponse:
     )
 
 
-@router.get("/provenance")
+@_authed_router.get("/provenance")
 async def provenance_sessions() -> list[dict]:
     """全セッション一覧を返す（最新順）"""
     return await list_sessions()
 
 
-@router.get("/provenance/{session_id}", response_model=list[dict])
+@_authed_router.get("/provenance/{session_id}", response_model=list[dict])
 async def provenance_detail(session_id: str) -> list[dict]:
     """セッションの来歴（PROV-DM Activity チェーン）を返す"""
     return await get_session_history(session_id)
 
 
-@router.delete("/provenance/{session_id}", status_code=204)
+@_authed_router.delete("/provenance/{session_id}", status_code=204)
 async def provenance_delete(session_id: str) -> None:
     """セッションの来歴データをすべて削除する"""
     deleted = await delete_session(session_id)
@@ -478,7 +487,7 @@ async def provenance_delete(session_id: str) -> None:
         raise HTTPException(status_code=404, detail="Session not found")
 
 
-@router.get("/provenance/{session_id}/graph", response_model=GraphResponse)
+@_authed_router.get("/provenance/{session_id}/graph", response_model=GraphResponse)
 async def provenance_graph(session_id: str) -> GraphResponse:
     """セッションの来歴グラフを返す（フロントエンド可視化用）
 
@@ -490,9 +499,18 @@ async def provenance_graph(session_id: str) -> GraphResponse:
     return GraphResponse(nodes=graph["nodes"], edges=graph["edges"])
 
 
-@router.websocket("/agent/ws")
-async def agent_ws(websocket: WebSocket, session_id: str | None = None) -> None:
+@_authed_router.websocket("/agent/ws")
+async def agent_ws(
+    websocket: WebSocket,
+    session_id: str | None = None,
+    api_key: str | None = None,
+) -> None:
     """WebSocket でストリーミング応答を返す"""
+    # WebSocket は HTTP ヘッダー Dependency が効かないため、クエリパラメータで検証
+    if settings.agent_api_key:
+        if api_key is None or not hmac.compare_digest(api_key, settings.agent_api_key):
+            await websocket.close(code=4001, reason="Invalid or missing API key")
+            return
     await websocket.accept()
     session_id = session_id or str(uuid.uuid4())
 
@@ -644,3 +662,8 @@ async def agent_ws(websocket: WebSocket, session_id: str | None = None) -> None:
             if not future.done():
                 future.set_result(False)
         receive_task.cancel()
+
+
+# ルーター統合
+router.include_router(_public_router)
+router.include_router(_authed_router)
