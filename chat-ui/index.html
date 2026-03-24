@@ -1597,6 +1597,16 @@
   <!-- ===== 右: 設定パネル ===== -->
   <div id="right-panel">
 
+    <!-- API キー設定（折りたたみ・デフォルト閉） -->
+    <details class="rp-section">
+      <summary>API Key</summary>
+      <div class="rp-body">
+        <input type="password" id="api-key-input" placeholder="未設定（認証なし）" style="width:100%;font-family:monospace;font-size:12px;padding:6px 8px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--fg);box-sizing:border-box;">
+        <button id="api-key-save" style="margin-top:6px;padding:4px 12px;font-size:11px;background:var(--primary);color:#fff;border:none;border-radius:4px;cursor:pointer;">保存して再接続</button>
+        <div id="api-key-status" style="font-size:11px;color:var(--muted-fg);margin-top:4px;"></div>
+      </div>
+    </details>
+
     <!-- Status（折りたたみ・デフォルト閉） -->
     <details class="rp-section">
       <summary>Status</summary>
@@ -1743,6 +1753,21 @@
     // --- セッション ID 管理 ---
     const STORAGE_KEY = 'crucible_session_id';
     const TITLE_KEY = 'crucible_session_titles';
+    const API_KEY_KEY = 'crucible_api_key';
+
+    // API キー管理（localStorage に保存）
+    function getApiKey() { return localStorage.getItem(API_KEY_KEY) || ''; }
+    function setApiKey(key) { localStorage.setItem(API_KEY_KEY, key); }
+
+    // 認証付き fetch ラッパー（全 API 呼び出しで使用）
+    const _origFetch = window.fetch;
+    window.fetch = function(url, opts = {}) {
+      const key = getApiKey();
+      if (key && typeof url === 'string' && url.startsWith('/')) {
+        opts.headers = { ...(opts.headers || {}), 'X-API-Key': key };
+      }
+      return _origFetch.call(this, url, opts);
+    };
 
     let wsSessionId = localStorage.getItem(STORAGE_KEY);
     if (!wsSessionId) {
@@ -2202,7 +2227,10 @@
     // --- WebSocket ---
     function connect() {
       const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-      ws = new WebSocket(`${proto}//${location.host}/agent/ws?session_id=${wsSessionId}`);
+      const wsParams = new URLSearchParams({ session_id: wsSessionId });
+      const key = getApiKey();
+      if (key) wsParams.set('api_key', key);
+      ws = new WebSocket(`${proto}//${location.host}/agent/ws?${wsParams}`);
 
       ws.onopen = () => {
         statusEl.textContent = '接続中';
@@ -3494,6 +3522,24 @@
         }
       });
     }
+
+    // --- API キー設定 UI ---
+    const apiKeyInput = document.getElementById('api-key-input');
+    const apiKeySaveBtn = document.getElementById('api-key-save');
+    const apiKeyStatus = document.getElementById('api-key-status');
+    apiKeyInput.value = getApiKey();
+    apiKeySaveBtn.addEventListener('click', () => {
+      setApiKey(apiKeyInput.value.trim());
+      apiKeyStatus.textContent = '保存しました。再接続中...';
+      if (ws) { ws.close(); }
+      connect();
+      loadHealth();
+      loadModels();
+      loadProfiles();
+      loadTools();
+      loadSessionList();
+      setTimeout(() => { apiKeyStatus.textContent = ''; }, 2000);
+    });
 
     // --- 初期化 ---
     loadHealth();
