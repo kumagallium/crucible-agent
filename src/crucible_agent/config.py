@@ -31,8 +31,11 @@ class Settings(BaseSettings):
     # --- Plan Mode ---
     approval_timeout: int = 300  # 承認待ちタイムアウト（秒）
 
+    # --- Auth ---
+    agent_api_key: str = ""  # 空の場合は認証スキップ（開発用）
+
     # --- CORS ---
-    cors_origins: str = "*"  # カンマ区切りで複数指定可（例: "http://localhost:5173,https://app.example.com"）
+    cors_origins: str = ""  # カンマ区切りで複数指定可（例: "http://localhost:5173,https://app.example.com"）。空の場合は同一オリジンのみ
 
     # --- mcp-agent ---
     mcp_config_path: str = "mcp_agent.config.yaml"
