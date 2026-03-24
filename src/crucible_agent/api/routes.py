@@ -507,11 +507,12 @@ async def agent_ws(
 ) -> None:
     """WebSocket でストリーミング応答を返す"""
     # WebSocket は HTTP ヘッダー Dependency が効かないため、クエリパラメータで検証
+    # accept() してから close() しないとブラウザに close code が届かない
+    await websocket.accept()
     if settings.agent_api_key:
         if api_key is None or not hmac.compare_digest(api_key, settings.agent_api_key):
             await websocket.close(code=4001, reason="Invalid or missing API key")
             return
-    await websocket.accept()
     session_id = session_id or str(uuid.uuid4())
 
     # Plan モード用: tool_call_id → Future[bool]
