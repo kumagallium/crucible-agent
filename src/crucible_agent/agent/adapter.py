@@ -17,6 +17,7 @@ from typing import Any
 import httpx
 from mcp import ClientSession
 from mcp.client.sse import sse_client
+from mcp.client.streamable_http import streamable_http_client
 
 from crucible_agent.config import settings
 
@@ -71,7 +72,13 @@ async def _connect_servers(
 
     for s in servers:
         try:
-            read_stream, write_stream = await exit_stack.enter_async_context(sse_client(s.url))
+            # トランスポートに応じてクライアントを切り替え
+            if s.transport == "streamable-http":
+                read_stream, write_stream, _ = await exit_stack.enter_async_context(
+                    streamable_http_client(s.url)
+                )
+            else:
+                read_stream, write_stream = await exit_stack.enter_async_context(sse_client(s.url))
             session = await exit_stack.enter_async_context(ClientSession(read_stream, write_stream))
             await session.initialize()
             logger.info("MCP connected: %s (%s)", s.name, s.url)
