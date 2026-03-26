@@ -3409,6 +3409,24 @@
       if (e.target === modelModalOverlay) closeModelModal();
     });
 
+    // ローディングオーバーレイ（操作中のクリック防止）
+    function showModelLoading(message) {
+      let overlay = document.getElementById('mm-loading-overlay');
+      if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'mm-loading-overlay';
+        overlay.style.cssText = 'position:absolute;inset:0;background:rgba(255,255,255,0.85);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:10;border-radius:var(--radius-lg);';
+        mmBody.parentElement.style.position = 'relative';
+        mmBody.parentElement.appendChild(overlay);
+      }
+      overlay.innerHTML = `<div style="font-size:13px;color:var(--muted-fg);text-align:center;"><div style="margin-bottom:8px;">⏳</div>${message || '処理中...'}<div style="font-size:11px;margin-top:4px;">LiteLLM を再起動しています</div></div>`;
+      overlay.style.display = 'flex';
+    }
+    function hideModelLoading() {
+      const overlay = document.getElementById('mm-loading-overlay');
+      if (overlay) overlay.style.display = 'none';
+    }
+
     // プロバイダー定義
     const MODEL_PROVIDERS = [
       { id: 'openai', name: 'OpenAI', models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'o3-mini'] },
@@ -3461,6 +3479,7 @@
       mmBody.querySelectorAll('.mm-delete-btn').forEach(btn => {
         btn.addEventListener('click', async () => {
           if (!confirm('このモデルを削除しますか？')) return;
+          showModelLoading('削除中...');
           try {
             const resp = await fetch('/models', {
               method: 'DELETE',
@@ -3475,6 +3494,8 @@
             await renderModelList();
           } catch (err) {
             alert('削除に失敗しました: ' + err.message);
+          } finally {
+            hideModelLoading();
           }
         });
       });
@@ -3589,6 +3610,7 @@
         };
         if (apiBase) body.api_base = apiBase;
 
+        showModelLoading('追加中...');
         try {
           const resp = await fetch('/models', {
             method: 'POST',
@@ -3603,6 +3625,8 @@
           await renderModelList();
         } catch (err) {
           alert('追加に失敗しました: ' + err.message);
+        } finally {
+          hideModelLoading();
         }
       });
     }
@@ -3686,17 +3710,17 @@
           return;
         }
 
-        try {
-          const body = {
-            model_name: modelName,
-            provider: providerSelect.value,
-            model_id: modelId,
-            litellm_id: model.id,
-            old_name: model.name,
-          };
-          if (apiKey) body.api_key = apiKey;
-          if (apiBase) body.api_base = apiBase;
+        const body = {
+          model_name: modelName,
+          provider: providerSelect.value,
+          model_id: modelId,
+          old_name: model.name,
+        };
+        if (apiKey) body.api_key = apiKey;
+        if (apiBase) body.api_base = apiBase;
 
+        showModelLoading('更新中...');
+        try {
           const resp = await fetch('/models', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
@@ -3710,6 +3734,8 @@
           await renderModelList();
         } catch (err) {
           alert('更新に失敗しました: ' + err.message);
+        } finally {
+          hideModelLoading();
         }
       });
     }
