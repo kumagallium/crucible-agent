@@ -319,7 +319,7 @@ async def _save_model_meta(
             " SET model_info = $1"
             " WHERE model_id = $2",
             meta,
-            uuid.UUID(model_id),
+            model_id,
         )
     finally:
         await conn.close()
