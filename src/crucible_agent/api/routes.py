@@ -291,7 +291,7 @@ async def models_update(req: _ModelUpdateRequest) -> dict:
             await conn.execute(
                 'UPDATE "LiteLLM_ProxyModelTable"'
                 " SET model_name = $1"
-                " WHERE model_id = $2",
+                " WHERE model_id = $2::uuid",
                 req.model_name,
                 req.litellm_id,
             )
@@ -303,6 +303,11 @@ async def models_update(req: _ModelUpdateRequest) -> dict:
         raise HTTPException(
             status_code=e.response.status_code,
             detail=e.response.text,
+        ) from e
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=str(e),
         ) from e
 
 
