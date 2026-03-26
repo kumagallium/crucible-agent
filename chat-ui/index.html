@@ -3577,7 +3577,7 @@
         const apiBase = document.getElementById('mm-api-base').value.trim();
 
         if (!modelId || !apiKey) {
-          alert('モデル ID: [' + modelId + '], API キー: [' + (apiKey ? '入力済み' : '空') + ']');
+          alert('モデルと API キーは必須です');
           return;
         }
 
@@ -3599,7 +3599,6 @@
             const err = await resp.text();
             throw new Error(err);
           }
-          alert('追加成功！');
           loadModels();
           await renderModelList();
         } catch (err) {

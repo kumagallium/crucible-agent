@@ -106,7 +106,14 @@ def _litellm_headers() -> dict[str, str]:
 
 @_authed_router.get("/models")
 async def models_list() -> dict:
-    """LiteLLM に登録されたモデル一覧を返す"""
+    """LiteLLM に登録されたモデル一覧を返す
+
+    /model/info（ランタイム上の config モデル）と
+    LiteLLM DB（API で追加した DB モデル）をマージして返す。
+    """
+    model_map: dict[str, dict] = {}  # id -> model
+
+    # 1. /model/info からランタイム上のモデルを取得（config モデル含む）
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
             resp = await client.get(
@@ -116,42 +123,72 @@ async def models_list() -> dict:
             resp.raise_for_status()
             data = resp.json()
 
-        model_list = []
         for m in data.get("data", []):
             model_name = m.get("model_name", "")
             model_info = m.get("model_info", {})
             litellm_params = m.get("litellm_params", {})
             raw_model = litellm_params.get("model", "")
-            model_list.append(
-                {
-                    "id": model_info.get("id", model_name),
-                    "name": model_name,
-                    "provider": raw_model.split("/")[0] if "/" in raw_model else "unknown",
-                    "model_id": raw_model,
-                    "supports_function_calling": litellm_params.get(
-                        "supports_function_calling",
-                        False,
-                    ),
-                    "db_model": model_info.get("db_model", False),
-                }
-            )
-
-        return {"models": model_list, "default": settings.llm_model}
+            mid = model_info.get("id", model_name)
+            model_map[mid] = {
+                "id": mid,
+                "name": model_name,
+                "provider": raw_model.split("/")[0] if "/" in raw_model else "unknown",
+                "model_id": raw_model,
+                "supports_function_calling": litellm_params.get(
+                    "supports_function_calling",
+                    False,
+                ),
+                "db_model": model_info.get("db_model", False),
+            }
     except Exception:
         logger.warning("Failed to fetch models from LiteLLM", exc_info=True)
-        return {
-            "models": [
-                {
-                    "id": settings.llm_model,
-                    "name": settings.llm_model,
-                    "provider": "unknown",
-                    "model_id": "",
-                    "supports_function_calling": True,
-                    "db_model": False,
-                },
-            ],
-            "default": settings.llm_model,
+
+    # 2. LiteLLM DB から DB モデルを補完（/model/info に載らないものを追加）
+    try:
+        import asyncpg
+
+        dsn = settings.database_url.replace("+asyncpg", "").replace(
+            "/crucible_agent", "/litellm"
+        )
+        conn = await asyncpg.connect(dsn)
+        try:
+            rows = await conn.fetch(
+                'SELECT model_id, model_name, litellm_params'
+                ' FROM "LiteLLM_ProxyModelTable"'
+            )
+        finally:
+            await conn.close()
+
+        for row in rows:
+            mid = str(row["model_id"])
+            if mid in model_map:
+                continue  # /model/info で既に取得済み
+            params = row["litellm_params"] if isinstance(row["litellm_params"], dict) else {}
+            raw_model = params.get("model", "")
+            model_map[mid] = {
+                "id": mid,
+                "name": row["model_name"],
+                "provider": raw_model.split("/")[0] if "/" in raw_model else "unknown",
+                "model_id": raw_model,
+                "supports_function_calling": params.get(
+                    "supports_function_calling", False
+                ),
+                "db_model": True,
+            }
+    except Exception:
+        logger.warning("Failed to fetch DB models", exc_info=True)
+
+    if not model_map:
+        model_map["fallback"] = {
+            "id": settings.llm_model,
+            "name": settings.llm_model,
+            "provider": "unknown",
+            "model_id": "",
+            "supports_function_calling": True,
+            "db_model": False,
         }
+
+    return {"models": list(model_map.values()), "default": settings.llm_model}
 
 
 # プロバイダーごとの model プレフィックス
