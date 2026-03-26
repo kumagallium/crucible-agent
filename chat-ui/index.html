@@ -3435,6 +3435,7 @@
         html += '<div class="pm-empty">モデルがありません</div>';
       } else {
         for (const m of models) {
+          const isDbModel = m.db_model === true;
           html += `
             <div class="pm-profile-card">
               <div class="pm-card-top">
@@ -3443,7 +3444,9 @@
                   <div class="pm-card-desc">${m.provider} / ${m.model_id}</div>
                 </div>
                 <div class="pm-card-actions">
-                  <button class="pm-card-edit-btn mm-edit-btn" data-model='${JSON.stringify(m).replace(/'/g, "&#39;")}' title="編集" style="background:none;border:none;cursor:pointer;font-size:14px;color:var(--muted-fg);padding:2px 6px;">&#x270E;</button><button class="pm-card-delete-btn mm-delete-btn" data-id="${m.id}" title="削除">&#x2715;</button>
+                  ${isDbModel
+                    ? `<button class="pm-card-edit-btn mm-edit-btn" data-model='${JSON.stringify(m).replace(/'/g, "&#39;")}' title="編集" style="background:none;border:none;cursor:pointer;font-size:14px;color:var(--muted-fg);padding:2px 6px;">&#x270E;</button><button class="pm-card-delete-btn mm-delete-btn" data-id="${m.id}" title="削除">&#x2715;</button>`
+                    : '<span style="font-size:11px;color:var(--muted-fg)">config</span>'}
                 </div>
               </div>
             </div>`;
