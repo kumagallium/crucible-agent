@@ -3692,6 +3692,7 @@
             provider: providerSelect.value,
             model_id: modelId,
             litellm_id: model.id,
+            old_name: model.name,
           };
           if (apiKey) body.api_key = apiKey;
           if (apiBase) body.api_base = apiBase;

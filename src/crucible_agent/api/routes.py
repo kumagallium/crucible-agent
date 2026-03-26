@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisco
 from pydantic import BaseModel
 
 from crucible_agent import __version__
+from crucible_agent import litellm_config
 from crucible_agent.agent.runner import run_agent, run_agent_stream
 from crucible_agent.api.auth import verify_api_key
 from crucible_agent.api.schemas import (
@@ -288,6 +289,9 @@ async def models_create(req: _ModelCreateRequest) -> dict:
         if model_id:
             await _save_model_meta(model_id, req.provider, litellm_model, req.api_base)
 
+        # config に永続化（LiteLLM 再起動時にロードされる）
+        litellm_config.add_model(req.model_name, litellm_model, req.api_key, req.api_base)
+
         return result
     except httpx.HTTPStatusError as e:
         raise HTTPException(
@@ -334,6 +338,29 @@ class _ModelDeleteRequest(BaseModel):
 @_authed_router.delete("/models", status_code=200)
 async def models_delete(req: _ModelDeleteRequest) -> dict:
     """LiteLLM からモデルを削除する"""
+    # 削除前にモデル名を取得（config から削除するため）
+    model_name = req.name if hasattr(req, "name") and req.name else None
+    if not model_name:
+        try:
+            import asyncpg
+
+            dsn = settings.database_url.replace("+asyncpg", "").replace(
+                "/crucible_agent", "/litellm"
+            )
+            conn = await asyncpg.connect(dsn)
+            try:
+                row = await conn.fetchrow(
+                    'SELECT model_name FROM "LiteLLM_ProxyModelTable"'
+                    " WHERE model_id = $1",
+                    req.id,
+                )
+                if row:
+                    model_name = row["model_name"]
+            finally:
+                await conn.close()
+        except Exception:
+            pass
+
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.post(
@@ -342,7 +369,12 @@ async def models_delete(req: _ModelDeleteRequest) -> dict:
                 json={"id": req.id},
             )
             resp.raise_for_status()
-            return resp.json()
+
+        # config からも削除
+        if model_name:
+            litellm_config.remove_model(model_name)
+
+        return resp.json()
     except httpx.HTTPStatusError as e:
         raise HTTPException(
             status_code=e.response.status_code,
@@ -360,6 +392,8 @@ class _ModelUpdateRequest(BaseModel):
     api_base: str | None = None
     # LiteLLM 内部 ID（既存モデルの特定に使用）
     litellm_id: str
+    # 変更前のモデル名（config 更新用）
+    old_name: str | None = None
 
 
 @_authed_router.put("/models", status_code=200)
@@ -404,6 +438,12 @@ async def models_update(req: _ModelUpdateRequest) -> dict:
             new_id = result.get("model_id") or result.get("model_info", {}).get("id")
             if new_id:
                 await _save_model_meta(new_id, req.provider, litellm_model, req.api_base)
+
+            # config を更新
+            old = req.old_name or req.model_name
+            litellm_config.update_model(
+                old, req.model_name, litellm_model, req.api_key, req.api_base
+            )
             return result
         except httpx.HTTPStatusError as e:
             raise HTTPException(
@@ -436,6 +476,10 @@ async def models_update(req: _ModelUpdateRequest) -> dict:
             )
         finally:
             await conn.close()
+
+        # config を更新（表示名のみ）
+        old = req.old_name or req.model_name
+        litellm_config.update_model(old, req.model_name)
         return {"message": "updated"}
 
 

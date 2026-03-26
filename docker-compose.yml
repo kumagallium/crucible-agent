@@ -29,6 +29,7 @@ services:
         condition: service_started
     volumes:
       - ./mcp_agent.config.yaml:/app/mcp_agent.config.yaml:ro
+      - ./litellm_config.yaml:/app/litellm_config.yaml
     restart: unless-stopped
 
   litellm:
