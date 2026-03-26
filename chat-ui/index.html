@@ -3489,16 +3489,19 @@
           <select id="mm-provider" style="padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-lg);background:var(--background);color:var(--foreground);font-size:13px;">
             ${providerOptions}
           </select>
-          <label style="font-size:13px;font-weight:500;color:var(--foreground)">モデル</label>
+          <label style="font-size:13px;font-weight:500;color:var(--foreground)">API キー</label>
+          <input id="mm-api-key" type="password" placeholder="sk-..." style="padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-lg);background:var(--background);color:var(--foreground);font-size:13px;">
+          <label style="font-size:13px;font-weight:500;color:var(--foreground)">API Base URL（オプション）</label>
+          <input id="mm-api-base" type="text" placeholder="https://..." style="padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-lg);background:var(--background);color:var(--foreground);font-size:13px;">
+          <div style="display:flex;gap:8px;align-items:center;">
+            <label style="font-size:13px;font-weight:500;color:var(--foreground);flex:1">モデル</label>
+            <button type="button" id="mm-fetch-models" style="font-size:11px;padding:4px 10px;border:1px solid var(--border);border-radius:var(--radius-lg);background:var(--muted);color:var(--foreground);cursor:pointer;">一覧を取得</button>
+          </div>
           <select id="mm-model-id" style="padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-lg);background:var(--background);color:var(--foreground);font-size:13px;">
           </select>
           <input id="mm-model-id-custom" type="text" placeholder="または手動入力..." style="padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-lg);background:var(--background);color:var(--foreground);font-size:13px;">
           <label style="font-size:13px;font-weight:500;color:var(--foreground)">表示名</label>
           <input id="mm-name" type="text" placeholder="例: gpt-4o" style="padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-lg);background:var(--background);color:var(--foreground);font-size:13px;">
-          <label style="font-size:13px;font-weight:500;color:var(--foreground)">API キー</label>
-          <input id="mm-api-key" type="password" placeholder="sk-..." style="padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-lg);background:var(--background);color:var(--foreground);font-size:13px;">
-          <label style="font-size:13px;font-weight:500;color:var(--foreground)">API Base URL（オプション）</label>
-          <input id="mm-api-base" type="text" placeholder="https://..." style="padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-lg);background:var(--background);color:var(--foreground);font-size:13px;">
           <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px;">
             <button type="button" id="mm-form-cancel" class="pm-new-btn" style="background:var(--muted);color:var(--foreground);">キャンセル</button>
             <button type="submit" class="pm-new-btn">追加</button>
@@ -3510,6 +3513,7 @@
       const modelSelect = document.getElementById('mm-model-id');
       const customInput = document.getElementById('mm-model-id-custom');
       const nameInput = document.getElementById('mm-name');
+      const fetchBtn = document.getElementById('mm-fetch-models');
 
       function updateModelOptions() {
         const provider = MODEL_PROVIDERS.find(p => p.id === providerSelect.value);
@@ -3519,6 +3523,37 @@
           customInput.value = '';
         }
       }
+
+      // API から利用可能なモデル一覧を取得
+      fetchBtn.addEventListener('click', async () => {
+        const apiKey = document.getElementById('mm-api-key').value.trim();
+        const apiBase = document.getElementById('mm-api-base').value.trim();
+        if (!apiKey || !apiBase) {
+          alert('API キーと API Base URL を先に入力してください');
+          return;
+        }
+        fetchBtn.textContent = '取得中...';
+        fetchBtn.disabled = true;
+        try {
+          const resp = await fetch('/models/available', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ api_base: apiBase, api_key: apiKey }),
+          });
+          if (!resp.ok) throw new Error(await resp.text());
+          const data = await resp.json();
+          modelSelect.innerHTML = data.models.map(m => `<option value="${m}">${m}</option>`).join('');
+          if (modelSelect.options.length > 0) {
+            nameInput.value = modelSelect.value;
+            customInput.value = '';
+          }
+        } catch (err) {
+          alert('モデル一覧の取得に失敗しました: ' + err.message);
+        } finally {
+          fetchBtn.textContent = '一覧を取得';
+          fetchBtn.disabled = false;
+        }
+      });
 
       providerSelect.addEventListener('change', updateModelOptions);
       modelSelect.addEventListener('change', () => {

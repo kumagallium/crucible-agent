@@ -166,6 +166,37 @@ _PROVIDER_PREFIX: dict[str, str] = {
 }
 
 
+class _ProviderModelsRequest(BaseModel):
+    """POST /models/available リクエスト"""
+
+    api_base: str
+    api_key: str
+
+
+@_authed_router.post("/models/available")
+async def models_available(req: _ProviderModelsRequest) -> dict:
+    """プロバイダーの API から利用可能なモデル一覧を取得する（OpenAI 互換）"""
+    url = f"{req.api_base.rstrip('/')}/models"
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(
+                url,
+                headers={"Authorization": f"Bearer {req.api_key}"},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            # OpenAI 互換の /models レスポンスからモデル ID 一覧を抽出
+            models = [m["id"] for m in data.get("data", []) if m.get("id")]
+            return {"models": sorted(models)}
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(
+            status_code=e.response.status_code,
+            detail=e.response.text,
+        ) from e
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e)) from e
+
+
 class _ModelCreateRequest(BaseModel):
     """POST /models リクエスト"""
 
