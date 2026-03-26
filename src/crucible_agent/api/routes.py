@@ -291,9 +291,9 @@ async def models_update(req: _ModelUpdateRequest) -> dict:
             await conn.execute(
                 'UPDATE "LiteLLM_ProxyModelTable"'
                 " SET model_name = $1"
-                " WHERE model_id = $2::uuid",
+                " WHERE model_id = $2",
                 req.model_name,
-                req.litellm_id,
+                uuid.UUID(req.litellm_id),
             )
         finally:
             await conn.close()
