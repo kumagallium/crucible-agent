@@ -1,8 +1,15 @@
 # LiteLLM Proxy Configuration
 # Docs: https://docs.litellm.ai/docs/proxy/configs
 
-# モデルは DB で管理（UI から追加・編集・削除可能）
-# model_list を省略し、store_model_in_db: true で DB からロードする
+model_list:
+  # さくらのAI Engine
+  - model_name: sakura
+    litellm_params:
+      model: openai/gpt-oss-120b
+      api_base: os.environ/SAKURA_AI_API_BASE
+      api_key: os.environ/SAKURA_AI_API_KEY
+      supports_function_calling: true
+      merge_reasoning_content_in_choices: true
 
 general_settings:
   master_key: sk-crucible-agent-dev
