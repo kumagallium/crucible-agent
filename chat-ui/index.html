@@ -3444,7 +3444,7 @@
                   <div class="pm-card-desc">${m.provider} / ${m.model_id}</div>
                 </div>
                 <div class="pm-card-actions">
-                  ${canDelete ? `<button class="pm-card-delete-btn mm-delete-btn" data-id="${m.id}" title="削除">&#x2715;</button>` : '<span style="font-size:11px;color:var(--muted-fg)">config</span>'}
+                  ${canDelete ? `<button class="pm-card-edit-btn mm-edit-btn" data-model='${JSON.stringify(m).replace(/'/g, "&#39;")}' title="編集" style="background:none;border:none;cursor:pointer;font-size:14px;color:var(--muted-fg);padding:2px 6px;">&#x270E;</button><button class="pm-card-delete-btn mm-delete-btn" data-id="${m.id}" title="削除">&#x2715;</button>` : '<span style="font-size:11px;color:var(--muted-fg)">config</span>'}
                 </div>
               </div>
             </div>`;
@@ -3453,6 +3453,12 @@
       mmBody.innerHTML = html;
 
       document.getElementById('mm-new-btn').addEventListener('click', () => renderModelForm());
+      mmBody.querySelectorAll('.mm-edit-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const model = JSON.parse(btn.dataset.model);
+          renderModelEditForm(model);
+        });
+      });
       mmBody.querySelectorAll('.mm-delete-btn').forEach(btn => {
         btn.addEventListener('click', async () => {
           if (!confirm('このモデルを削除しますか？')) return;
@@ -3560,6 +3566,111 @@
           renderModelList();
         } catch (err) {
           alert('追加に失敗しました: ' + err.message);
+        }
+      });
+    }
+
+    function renderModelEditForm(model) {
+      mmModalTitle.textContent = 'モデル編集';
+      let providerOptions = MODEL_PROVIDERS.map(p =>
+        `<option value="${p.id}" ${p.id === model.provider ? 'selected' : ''}>${p.name}</option>`
+      ).join('');
+      // 既知のプロバイダーに含まれない場合は追加
+      if (!MODEL_PROVIDERS.some(p => p.id === model.provider)) {
+        providerOptions += `<option value="${model.provider}" selected>${model.provider}</option>`;
+      }
+
+      // model_id からプレフィックスを除去して元の ID を復元
+      const rawModelId = model.model_id.includes('/') ? model.model_id.split('/').slice(1).join('/') : model.model_id;
+
+      mmBody.innerHTML = `
+        <form id="mm-edit-form" style="display:flex;flex-direction:column;gap:10px;">
+          <label style="font-size:13px;font-weight:500;color:var(--foreground)">プロバイダー</label>
+          <select id="mm-edit-provider" style="padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-lg);background:var(--background);color:var(--foreground);font-size:13px;">
+            ${providerOptions}
+          </select>
+          <label style="font-size:13px;font-weight:500;color:var(--foreground)">モデル</label>
+          <select id="mm-edit-model-id" style="padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-lg);background:var(--background);color:var(--foreground);font-size:13px;">
+          </select>
+          <input id="mm-edit-model-id-custom" type="text" placeholder="または手動入力..." value="${rawModelId}" style="padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-lg);background:var(--background);color:var(--foreground);font-size:13px;">
+          <label style="font-size:13px;font-weight:500;color:var(--foreground)">表示名</label>
+          <input id="mm-edit-name" type="text" value="${model.name}" style="padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-lg);background:var(--background);color:var(--foreground);font-size:13px;">
+          <label style="font-size:13px;font-weight:500;color:var(--foreground)">API キー（変更する場合のみ入力）</label>
+          <input id="mm-edit-api-key" type="password" placeholder="変更しない場合は空欄" style="padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-lg);background:var(--background);color:var(--foreground);font-size:13px;">
+          <label style="font-size:13px;font-weight:500;color:var(--foreground)">API Base URL（オプション）</label>
+          <input id="mm-edit-api-base" type="text" placeholder="https://..." style="padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-lg);background:var(--background);color:var(--foreground);font-size:13px;">
+          <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px;">
+            <button type="button" id="mm-edit-cancel" class="pm-new-btn" style="background:var(--muted);color:var(--foreground);">キャンセル</button>
+            <button type="submit" class="pm-new-btn">更新</button>
+          </div>
+        </form>
+      `;
+
+      const providerSelect = document.getElementById('mm-edit-provider');
+      const modelSelect = document.getElementById('mm-edit-model-id');
+      const customInput = document.getElementById('mm-edit-model-id-custom');
+      const nameInput = document.getElementById('mm-edit-name');
+
+      function updateModelOptions() {
+        const provider = MODEL_PROVIDERS.find(p => p.id === providerSelect.value);
+        modelSelect.innerHTML = (provider ? provider.models : []).map(m => `<option value="${m}">${m}</option>`).join('');
+        // カスタム入力がある場合はセレクトをクリア
+        if (customInput.value.trim()) {
+          modelSelect.value = '';
+        }
+      }
+
+      providerSelect.addEventListener('change', updateModelOptions);
+      modelSelect.addEventListener('change', () => {
+        if (modelSelect.value) {
+          nameInput.value = modelSelect.value;
+          customInput.value = '';
+        }
+      });
+      customInput.addEventListener('input', () => {
+        if (customInput.value.trim()) {
+          nameInput.value = customInput.value.trim();
+          modelSelect.value = '';
+        }
+      });
+      updateModelOptions();
+
+      document.getElementById('mm-edit-cancel').addEventListener('click', () => renderModelList());
+      document.getElementById('mm-edit-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const modelId = customInput.value.trim() || modelSelect.value;
+        const modelName = nameInput.value.trim() || modelId;
+        const apiKey = document.getElementById('mm-edit-api-key').value.trim();
+        const apiBase = document.getElementById('mm-edit-api-base').value.trim();
+
+        if (!modelId) {
+          alert('モデルは必須です');
+          return;
+        }
+
+        try {
+          const body = {
+            model_name: modelName,
+            provider: providerSelect.value,
+            model_id: modelId,
+            litellm_id: model.id,
+          };
+          if (apiKey) body.api_key = apiKey;
+          if (apiBase) body.api_base = apiBase;
+
+          const resp = await fetch('/models', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          });
+          if (!resp.ok) {
+            const err = await resp.text();
+            throw new Error(err);
+          }
+          loadModels();
+          renderModelList();
+        } catch (err) {
+          alert('更新に失敗しました: ' + err.message);
         }
       });
     }
