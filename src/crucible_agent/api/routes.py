@@ -7,6 +7,7 @@ import hmac
 import json
 import logging
 import uuid
+from urllib.parse import urlparse
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
@@ -143,9 +144,20 @@ class _ProviderModelsRequest(BaseModel):
     api_key: str
 
 
+def _validate_api_base(url: str) -> None:
+    """api_base の URL スキームを検証する（http/https のみ許可）。"""
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        raise HTTPException(
+            status_code=400,
+            detail="api_base には http または https の URL を指定してください",
+        )
+
+
 @_authed_router.post("/models/available")
 async def models_available(req: _ProviderModelsRequest) -> dict:
     """プロバイダーの API から利用可能なモデル一覧を取得する（OpenAI 互換）"""
+    _validate_api_base(req.api_base)
     url = f"{req.api_base.rstrip('/')}/models"
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
@@ -158,13 +170,17 @@ async def models_available(req: _ProviderModelsRequest) -> dict:
             # OpenAI 互換の /models レスポンスからモデル ID 一覧を抽出
             models = [m["id"] for m in data.get("data", []) if m.get("id")]
             return {"models": sorted(models)}
-    except httpx.HTTPStatusError as e:
+    except httpx.HTTPStatusError:
         raise HTTPException(
-            status_code=e.response.status_code,
-            detail=e.response.text,
-        ) from e
+            status_code=502,
+            detail="プロバイダー API がエラーを返しました",
+        )
     except Exception as e:
-        raise HTTPException(status_code=502, detail=str(e)) from e
+        logger.warning("models_available: プロバイダー API への接続失敗 — %s", e)
+        raise HTTPException(
+            status_code=502,
+            detail="プロバイダー API への接続に失敗しました",
+        ) from e
 
 
 class _ModelCreateRequest(BaseModel):
