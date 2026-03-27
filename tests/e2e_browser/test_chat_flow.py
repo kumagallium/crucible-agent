@@ -116,16 +116,17 @@ class TestSessionList:
         chat_page.locator("#send").click()
 
         # AI レスポンス完了を待つ
-        chat_page.locator(".msg.agent").last.wait_for(timeout=10000)
+        chat_page.locator(".msg.agent").last.wait_for(timeout=15000)
 
-        # セッション一覧の更新を待つ（loadSessionList は done 後に呼ばれる）
-        # .session-item か data-sid 属性を持つ要素を待つ
+        # セッション一覧の更新を待つ
+        # entity_recorded → loadSessionList() → DOM 更新 の一連の流れを待つ
+        # CI 環境では generate_session_title の接続タイムアウト（8秒）分の余裕が必要
         chat_page.wait_for_function(
             """() => {
                 const items = document.querySelectorAll('.session-item, [data-sid]');
                 return items.length > 0;
             }""",
-            timeout=10000,
+            timeout=30000,
         )
 
     def test_new_chat_creates_new_session(self, chat_page: Page):
