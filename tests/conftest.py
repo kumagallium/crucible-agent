@@ -13,18 +13,9 @@ for mod in [
     if mod not in sys.modules:
         sys.modules[mod] = MagicMock()
 
-# provenance モジュールが Python 3.10+ の型ヒントを使っているためモック
-# (str | None は Python 3.9 では解釈できない)
-for mod in [
-    "crucible_agent.provenance",
-    "crucible_agent.provenance.models",
-    "crucible_agent.provenance.recorder",
-]:
-    if mod not in sys.modules:
-        mock = MagicMock()
-        mock.record_agent_run = MagicMock()
-        mock.init_db = MagicMock()
-        sys.modules[mod] = mock
+# provenance モジュール: Python 3.12+ では型ヒントのモック不要。
+# recorder は import 時に DB エンジンを初期化するため、
+# テスト用 config (database_url = sqlite) で安全に動作する。
 
 # Settings が .env を読み込んで extra fields エラーになるのを防ぐため、
 # config モジュールをモック版に差し替えてからアプリコードをインポートする

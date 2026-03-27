@@ -25,6 +25,11 @@ dev = [
     "pytest-cov>=6.0",
     "ruff>=0.8",
     "httpx",  # for TestClient
+    "aiosqlite>=0.20",  # テスト用 async SQLite ドライバ
+]
+e2e = [
+    "crucible-agent[dev]",
+    "pytest-playwright>=0.5",  # ブラウザ E2E テスト
 ]
 
 [build-system]
