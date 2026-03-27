@@ -26,6 +26,7 @@ dev = [
     "ruff>=0.8",
     "httpx",  # for TestClient
     "aiosqlite>=0.20",  # テスト用 async SQLite ドライバ
+    "pytest-playwright>=0.5",  # ブラウザ E2E テスト
 ]
 
 [build-system]
