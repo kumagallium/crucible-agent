@@ -120,13 +120,12 @@ class TestSessionList:
 
         # セッション一覧の更新を待つ
         # entity_recorded → loadSessionList() → DOM 更新 の一連の流れを待つ
-        # CI 環境では generate_session_title の接続タイムアウト（8秒）分の余裕が必要
         chat_page.wait_for_function(
             """() => {
                 const items = document.querySelectorAll('.session-item, [data-sid]');
                 return items.length > 0;
             }""",
-            timeout=30000,
+            timeout=15000,
         )
 
     def test_new_chat_creates_new_session(self, chat_page: Page):

@@ -67,9 +67,9 @@ def _run_server(port: int, ready_event: threading.Event) -> uvicorn.Server:
             "crucible_agent.agent.runner.adapter_run_stream",
             side_effect=lambda **kw: _mock_run_agent_stream(**kw),
         ),
-        # LiteLLM API を到達不能にして generate_session_title を即座にフォールバックさせる
-        patch("crucible_agent.config.settings.litellm_api_base", "http://127.0.0.1:1"),
-        patch("crucible_agent.api.routes.settings.litellm_api_base", "http://127.0.0.1:1"),
+        # _resolve_default_model を空文字にして generate_session_title の
+        # LiteLLM 接続をスキップ（早期リターンで "New Chat" を返す）
+        patch("crucible_agent.api.routes._resolve_default_model", return_value=""),
     ]
     for p in patches:
         p.start()
