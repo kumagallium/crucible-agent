@@ -184,12 +184,14 @@ async def _call_llm(
     """LiteLLM Proxy に chat completions リクエストを送る（リトライ付き）"""
     from crucible_agent import litellm_config
 
-    resolved_model = model or settings.llm_model
-    if not resolved_model:
-        # 登録済みモデルの先頭を使用
-        registered = litellm_config.list_models()
-        if registered:
-            resolved_model = registered[0].get("model_name", "")
+    # モデル解決: 引数 → 環境変数（登録済みの場合のみ） → 登録済み先頭
+    registered = litellm_config.list_models()
+    registered_names = {m.get("model_name", "") for m in registered}
+    resolved_model = model
+    if not resolved_model and settings.llm_model in registered_names:
+        resolved_model = settings.llm_model
+    if not resolved_model and registered:
+        resolved_model = registered[0].get("model_name", "")
     if not resolved_model:
         raise LLMError(
             "モデルが設定されていません。管理画面からモデルを登録してください。",

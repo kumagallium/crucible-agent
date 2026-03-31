@@ -109,11 +109,16 @@ def _litellm_headers() -> dict[str, str]:
 def _resolve_default_model() -> str:
     """有効なデフォルトモデルを解決する
 
-    優先順位: 環境変数 LLM_MODEL → 登録済みモデルの先頭 → 空文字列
+    優先順位:
+    1. 環境変数 LLM_MODEL（登録済みモデルに存在する場合のみ）
+    2. 登録済みモデルの先頭
+    3. 空文字列
     """
-    if settings.llm_model:
-        return settings.llm_model
     models = litellm_config.list_models()
+    registered_names = {m.get("model_name", "") for m in models}
+
+    if settings.llm_model and settings.llm_model in registered_names:
+        return settings.llm_model
     if models:
         return models[0].get("model_name", "")
     return ""
@@ -153,8 +158,18 @@ _PROVIDER_PREFIX: dict[str, str] = {
 class _ProviderModelsRequest(BaseModel):
     """POST /models/available リクエスト"""
 
-    api_base: str
+    provider: str = "openai"
+    api_base: str | None = None
     api_key: str
+
+
+# プロバイダーごとのデフォルト API ベース URL
+_PROVIDER_DEFAULT_API_BASE: dict[str, str] = {
+    "openai": "https://api.openai.com/v1",
+    "anthropic": "https://api.anthropic.com",
+    "gemini": "https://generativelanguage.googleapis.com",
+    "groq": "https://api.groq.com/openai/v1",
+}
 
 
 def _validate_api_base(url: str) -> None:
@@ -167,27 +182,99 @@ def _validate_api_base(url: str) -> None:
         )
 
 
-@_authed_router.post("/models/available")
-async def models_available(req: _ProviderModelsRequest) -> dict:
-    """プロバイダーの API から利用可能なモデル一覧を取得する（OpenAI 互換）"""
-    _validate_api_base(req.api_base)
-    url = f"{req.api_base.rstrip('/')}/models"
-    try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.get(
-                url,
-                headers={"Authorization": f"Bearer {req.api_key}"},
-            )
+async def _fetch_openai_models(api_base: str, api_key: str) -> list[str]:
+    """OpenAI 互換 API からモデル一覧を取得する"""
+    url = f"{api_base.rstrip('/')}/models"
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        resp = await client.get(
+            url,
+            headers={"Authorization": f"Bearer {api_key}"},
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        return sorted([m["id"] for m in data.get("data", []) if m.get("id")])
+
+
+async def _fetch_anthropic_models(api_base: str, api_key: str) -> list[str]:
+    """Anthropic API からモデル一覧を取得する"""
+    url = f"{api_base.rstrip('/')}/v1/models"
+    headers = {
+        "x-api-key": api_key,
+        "anthropic-version": "2023-06-01",
+    }
+    all_models: list[str] = []
+    params: dict[str, str | int] = {"limit": 100}
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        while True:
+            resp = await client.get(url, headers=headers, params=params)
             resp.raise_for_status()
             data = resp.json()
-            # OpenAI 互換の /models レスポンスからモデル ID 一覧を抽出
-            models = [m["id"] for m in data.get("data", []) if m.get("id")]
-            return {"models": sorted(models)}
-    except httpx.HTTPStatusError:
+            all_models.extend(
+                m["id"] for m in data.get("data", []) if m.get("id")
+            )
+            if not data.get("has_more"):
+                break
+            params["after_id"] = data["last_id"]
+    return sorted(all_models)
+
+
+async def _fetch_gemini_models(api_base: str, api_key: str) -> list[str]:
+    """Gemini API からモデル一覧を取得する"""
+    url = f"{api_base.rstrip('/')}/v1beta/models"
+    all_models: list[str] = []
+    params: dict[str, str | int] = {"key": api_key, "pageSize": 100}
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        while True:
+            resp = await client.get(url, params=params)
+            resp.raise_for_status()
+            data = resp.json()
+            for m in data.get("models", []):
+                # generateContent をサポートするモデルのみ抽出
+                methods = m.get("supportedGenerationMethods", [])
+                if "generateContent" not in methods:
+                    continue
+                name = m.get("name", "")
+                # "models/" プレフィックスを除去
+                if name.startswith("models/"):
+                    name = name[len("models/"):]
+                if name:
+                    all_models.append(name)
+            next_token = data.get("nextPageToken")
+            if not next_token:
+                break
+            params["pageToken"] = next_token
+    return sorted(all_models)
+
+
+# プロバイダー → フェッチ関数のマッピング
+_PROVIDER_FETCHER = {
+    "anthropic": _fetch_anthropic_models,
+    "gemini": _fetch_gemini_models,
+}
+
+
+@_authed_router.post("/models/available")
+async def models_available(req: _ProviderModelsRequest) -> dict:
+    """プロバイダーの API から利用可能なモデル一覧を取得する"""
+    api_base = req.api_base or _PROVIDER_DEFAULT_API_BASE.get(req.provider, "")
+    if not api_base:
         raise HTTPException(
-            status_code=502,
-            detail="プロバイダー API がエラーを返しました",
+            status_code=400,
+            detail="API Base URL を指定してください",
         )
+    _validate_api_base(api_base)
+
+    fetcher = _PROVIDER_FETCHER.get(req.provider, _fetch_openai_models)
+    try:
+        models = await fetcher(api_base, req.api_key)
+        return {"models": models}
+    except httpx.HTTPStatusError as e:
+        detail = "プロバイダー API がエラーを返しました"
+        if e.response.status_code == 401:
+            detail = "API キーが無効です"
+        elif e.response.status_code == 403:
+            detail = "API キーに権限がありません"
+        raise HTTPException(status_code=502, detail=detail)
     except Exception as e:
         logger.warning("models_available: プロバイダー API への接続失敗 — %s", e)
         raise HTTPException(

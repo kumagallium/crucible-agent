@@ -3437,13 +3437,13 @@
       if (overlay) overlay.style.display = 'none';
     }
 
-    // プロバイダー定義
+    // プロバイダー定義（モデルリストは API から取得する）
     const MODEL_PROVIDERS = [
-      { id: 'openai', name: 'OpenAI', models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'o3-mini'] },
-      { id: 'anthropic', name: 'Anthropic', models: ['claude-sonnet-4-20250514', 'claude-haiku-4-5-20251001', 'claude-opus-4-20250514'] },
-      { id: 'gemini', name: 'Google Gemini', models: ['gemini-2.5-pro-preview-06-05', 'gemini-2.5-flash-preview-05-20'] },
-      { id: 'groq', name: 'Groq', models: ['llama-3.3-70b-versatile', 'mixtral-8x7b-32768'] },
-      { id: 'ollama', name: 'Ollama (local)', models: ['llama3.2', 'mistral', 'codellama'] },
+      { id: 'openai', name: 'OpenAI' },
+      { id: 'anthropic', name: 'Anthropic' },
+      { id: 'gemini', name: 'Google Gemini' },
+      { id: 'groq', name: 'Groq' },
+      { id: 'ollama', name: 'Ollama (local)' },
     ];
 
     async function renderModelList() {
@@ -3522,8 +3522,8 @@
           </select>
           <label style="font-size:13px;font-weight:500;color:var(--foreground)">API キー</label>
           <input id="mm-api-key" type="password" placeholder="sk-..." style="padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-lg);background:var(--background);color:var(--foreground);font-size:13px;">
-          <label style="font-size:13px;font-weight:500;color:var(--foreground)">API Base URL（オプション）</label>
-          <input id="mm-api-base" type="text" placeholder="https://..." style="padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-lg);background:var(--background);color:var(--foreground);font-size:13px;">
+          <label style="font-size:13px;font-weight:500;color:var(--foreground)">API Base URL（カスタムエンドポイント時のみ）</label>
+          <input id="mm-api-base" type="text" placeholder="未入力で公式 API を使用" style="padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-lg);background:var(--background);color:var(--foreground);font-size:13px;">
           <div style="display:flex;gap:8px;align-items:center;">
             <label style="font-size:13px;font-weight:500;color:var(--foreground);flex:1">モデル</label>
             <button type="button" id="mm-fetch-models" style="font-size:11px;padding:4px 10px;border:1px solid var(--border);border-radius:var(--radius-lg);background:var(--muted);color:var(--foreground);cursor:pointer;">一覧を取得</button>
@@ -3547,29 +3547,30 @@
       const fetchBtn = document.getElementById('mm-fetch-models');
 
       function updateModelOptions() {
-        const provider = MODEL_PROVIDERS.find(p => p.id === providerSelect.value);
-        modelSelect.innerHTML = (provider ? provider.models : []).map(m => `<option value="${m}">${m}</option>`).join('');
-        if (modelSelect.options.length > 0) {
-          nameInput.value = modelSelect.value;
-          customInput.value = '';
-        }
+        // モデルリストは API から取得するため、初期状態は空
+        modelSelect.innerHTML = '<option value="" disabled selected>「一覧を取得」で API から取得してください</option>';
+        nameInput.value = '';
+        customInput.value = '';
       }
 
       // API から利用可能なモデル一覧を取得
       fetchBtn.addEventListener('click', async () => {
         const apiKey = document.getElementById('mm-api-key').value.trim();
         const apiBase = document.getElementById('mm-api-base').value.trim();
-        if (!apiKey || !apiBase) {
-          alert('API キーと API Base URL を先に入力してください');
+        const provider = providerSelect.value;
+        if (!apiKey) {
+          alert('API キーを先に入力してください');
           return;
         }
         fetchBtn.textContent = '取得中...';
         fetchBtn.disabled = true;
         try {
+          const body = { provider, api_key: apiKey };
+          if (apiBase) body.api_base = apiBase;
           const resp = await fetch('/models/available', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ api_base: apiBase, api_key: apiKey }),
+            body: JSON.stringify(body),
           });
           if (!resp.ok) throw new Error(await resp.text());
           const data = await resp.json();
@@ -3586,7 +3587,21 @@
         }
       });
 
-      providerSelect.addEventListener('change', updateModelOptions);
+      providerSelect.addEventListener('change', () => {
+        updateModelOptions();
+        // プロバイダー変更時に API Base URL のプレースホルダーを更新
+        const apiBaseInput = document.getElementById('mm-api-base');
+        const hints = {
+          openai: 'https://api.openai.com/v1',
+          anthropic: 'https://api.anthropic.com',
+          gemini: 'https://generativelanguage.googleapis.com',
+          groq: 'https://api.groq.com/openai/v1',
+          ollama: 'http://localhost:11434',
+        };
+        const hint = hints[providerSelect.value];
+        apiBaseInput.placeholder = hint ? `未入力で ${hint} を使用` : 'API Base URL を入力';
+        apiBaseInput.value = '';
+      });
       modelSelect.addEventListener('change', () => {
         nameInput.value = modelSelect.value;
         customInput.value = '';
@@ -3684,9 +3699,8 @@
       const nameInput = document.getElementById('mm-edit-name');
 
       function updateModelOptions() {
-        const provider = MODEL_PROVIDERS.find(p => p.id === providerSelect.value);
-        modelSelect.innerHTML = (provider ? provider.models : []).map(m => `<option value="${m}">${m}</option>`).join('');
-        // カスタム入力がある場合はセレクトをクリア
+        // 編集時はカスタム入力に現在の値があるため、セレクトは空でよい
+        modelSelect.innerHTML = '<option value="" disabled selected>手動入力またはカスタム入力欄を使用</option>';
         if (customInput.value.trim()) {
           modelSelect.value = '';
         }
