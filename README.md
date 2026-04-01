@@ -145,7 +145,7 @@ API key authentication and CORS restrictions are **optional**. By default, no au
 | `AGENT_API_KEY` | *(empty)* | When set, all endpoints (except `/health`) require `X-API-Key` header. WebSocket uses `api_key` query parameter. |
 | `CORS_ORIGINS` | *(empty)* | Comma-separated list of allowed origins (e.g. `https://example.com,http://localhost:5173`). Empty means same-origin only. |
 
-> **Note:** If you only use the built-in Chat UI (served from the same origin), you don't need to configure either of these. They are useful when connecting external frontends like [provnote](https://github.com/kumagallium/provnote).
+> **Note:** If you only use the built-in Chat UI (served from the same origin), you don't need to configure either of these. They are useful when connecting external frontends like [Graphium](https://github.com/kumagallium/Graphium).
 
 ## API Endpoints
 
@@ -217,23 +217,23 @@ Crucible Agent is part of the **Crucible** ecosystem:
 graph LR
     Registry["🔧 Crucible<br/><b>Registry</b><br/><i>Build & deploy<br/>MCP servers</i>"]
     Agent["🤖 Crucible<br/><b>Agent</b><br/><i>AI agent<br/>runtime</i>"]
-    provnote["📝 <b>provnote</b><br/><i>Provenance<br/>tracking editor</i>"]
+    Graphium["📝 <b>Graphium</b><br/><i>Provenance<br/>tracking editor</i>"]
 
     Registry -- "tool discovery" --> Agent
-    Agent -- "POST /agent/run" --> provnote
+    Agent -- "POST /agent/run" --> Graphium
 
     style Registry fill:#edf5ee,stroke:#4B7A52,stroke-width:2px,color:#2d4a32
     style Agent fill:#ede8f5,stroke:#8b7ab5,stroke-width:2px,color:#4a3d6e
-    style provnote fill:#e8f0f8,stroke:#5b8fb9,stroke-width:2px,color:#2d4a6e
+    style Graphium fill:#e8f0f8,stroke:#5b8fb9,stroke-width:2px,color:#2d4a6e
 ```
 
 | Repository | Role | Link |
 |------------|------|------|
 | **Crucible** | MCP server build, deploy & management | [kumagallium/Crucible](https://github.com/kumagallium/Crucible) |
 | **Crucible Agent** | AI agent runtime with MCP tool support | [kumagallium/Crucible-Agent](https://github.com/kumagallium/Crucible-Agent) *(this repo)* |
-| **provnote** | PROV-DM provenance tracking editor | [kumagallium/provnote](https://github.com/kumagallium/provnote) |
+| **Graphium** | PROV-DM provenance tracking editor | [kumagallium/Graphium](https://github.com/kumagallium/Graphium) |
 
-Each project works independently. Together, they form a complete pipeline: Registry manages MCP servers → Agent connects them to LLMs → provnote provides a UI with provenance tracking.
+Each project works independently. Together, they form a complete pipeline: Registry manages MCP servers → Agent connects them to LLMs → Graphium provides a UI with provenance tracking.
 
 ## License
 
