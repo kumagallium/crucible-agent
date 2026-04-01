@@ -59,8 +59,8 @@ graph TB
 ## Quick Start
 
 ```bash
-git clone https://github.com/kumagallium/crucible-agent.git
-cd crucible-agent
+git clone https://github.com/kumagallium/Crucible-Agent.git
+cd Crucible-Agent
 ./setup.sh             # Generates .env from template
 # Edit .env with your API keys
 docker compose up -d
@@ -77,8 +77,8 @@ docker compose up -d
 Tested on **Ubuntu 22.04 LTS**. The setup script installs Docker, configures security hardening, and starts the application.
 
 ```bash
-git clone https://github.com/kumagallium/crucible-agent.git
-cd crucible-agent
+git clone https://github.com/kumagallium/Crucible-Agent.git
+cd Crucible-Agent
 sudo bash setup-server.sh
 ```
 
@@ -230,7 +230,7 @@ graph LR
 | Repository | Role | Link |
 |------------|------|------|
 | **Crucible** (Registry) | MCP server build, deploy & management | [kumagallium/Crucible](https://github.com/kumagallium/Crucible) |
-| **Crucible Agent** | AI agent runtime with MCP tool support | *(this repo)* |
+| **Crucible Agent** | AI agent runtime with MCP tool support | [kumagallium/Crucible-Agent](https://github.com/kumagallium/Crucible-Agent) *(this repo)* |
 | **provnote** | PROV-DM provenance tracking editor | [kumagallium/provnote](https://github.com/kumagallium/provnote) |
 
 Each project works independently. Together, they form a complete pipeline: Registry manages MCP servers → Agent connects them to LLMs → provnote provides a UI with provenance tracking.
