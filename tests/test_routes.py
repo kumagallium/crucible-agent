@@ -19,7 +19,7 @@ import pytest
 from types import SimpleNamespace
 from fastapi.testclient import TestClient
 
-from crucible_agent.crucible.discovery import DiscoveredServer
+from crucible_agent.crucible.discovery import AllTools, DiscoveredServer
 
 
 @pytest.fixture()
@@ -138,12 +138,14 @@ class TestHealthEndpoint:
 
 
 class TestToolsEndpoint:
-    @patch("crucible_agent.api.routes.discover_servers", new_callable=AsyncMock)
+    @patch("crucible_agent.api.routes.discover_all_tools", new_callable=AsyncMock)
     def test_returns_tool_list(self, mock_discover, client):
-        mock_discover.return_value = [
-            _make_server(name="server-a", display_name="Server A"),
-            _make_server(name="server-b", display_name="Server B"),
-        ]
+        mock_discover.return_value = AllTools(
+            servers=[
+                _make_server(name="server-a", display_name="Server A"),
+                _make_server(name="server-b", display_name="Server B"),
+            ],
+        )
 
         resp = client.get("/tools")
         assert resp.status_code == 200
@@ -152,31 +154,32 @@ class TestToolsEndpoint:
         assert data["tools"][0]["name"] == "server-a"
         assert data["tools"][1]["name"] == "server-b"
 
-    @patch("crucible_agent.api.routes.discover_servers", new_callable=AsyncMock)
+    @patch("crucible_agent.api.routes.discover_all_tools", new_callable=AsyncMock)
     def test_tool_fields(self, mock_discover, client):
-        mock_discover.return_value = [_make_server()]
+        mock_discover.return_value = AllTools(servers=[_make_server()])
 
         resp = client.get("/tools")
         tool = resp.json()["tools"][0]
         assert tool["name"] == "test-server"
         assert tool["display_name"] == "Test Server"
         assert tool["description"] == "A test MCP server"
+        assert tool["tool_type"] == "mcp_server"
         assert tool["url"] == "http://localhost:8000/sse"
         assert tool["transport"] == "sse"
         assert tool["status"] == "running"
 
-    @patch("crucible_agent.api.routes.discover_servers", new_callable=AsyncMock)
+    @patch("crucible_agent.api.routes.discover_all_tools", new_callable=AsyncMock)
     def test_discovery_returns_empty(self, mock_discover, client):
-        mock_discover.return_value = []
+        mock_discover.return_value = AllTools()
 
         resp = client.get("/tools")
         assert resp.status_code == 200
         data = resp.json()
         assert data["tools"] == []
 
-    @patch("crucible_agent.api.routes.discover_servers", new_callable=AsyncMock)
+    @patch("crucible_agent.api.routes.discover_all_tools", new_callable=AsyncMock)
     def test_sources_included(self, mock_discover, client):
-        mock_discover.return_value = [_make_server()]
+        mock_discover.return_value = AllTools(servers=[_make_server()])
 
         resp = client.get("/tools")
         data = resp.json()

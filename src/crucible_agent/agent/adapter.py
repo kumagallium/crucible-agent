@@ -12,7 +12,7 @@ import time
 from collections.abc import AsyncIterator, Callable
 from contextlib import AsyncExitStack
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import httpx
 from mcp import ClientSession
@@ -21,10 +21,9 @@ from mcp.client.streamable_http import streamable_http_client
 
 from crucible_agent.config import settings
 
-from typing import TYPE_CHECKING
-
 if TYPE_CHECKING:
-    from crucible_agent.crucible.discovery import DiscoveredServer
+    from crucible_agent.crucible.cli_executor import CliExecutor
+    from crucible_agent.crucible.discovery import DiscoveredCliLibrary, DiscoveredServer
 
 logger = logging.getLogger(__name__)
 
@@ -125,6 +124,67 @@ async def _call_tool(
     except Exception as e:
         logger.error("Tool call failed: %s - %s", tool_name, e)
         return json.dumps({"error": str(e)})
+
+
+# --- CLI/Library ツール ---
+
+
+def _build_cli_tool_defs(cli_tools: list[DiscoveredCliLibrary]) -> list[dict]:
+    """CLI/Library ツールを LLM の function calling 定義に変換する"""
+    defs: list[dict] = []
+    for t in cli_tools:
+        # ツール名: cli_<name>（ハイフンをアンダースコアに変換）
+        func_name = f"cli_{t.name.replace('-', '_')}"
+        desc = t.description or f"CLI tool: {t.name}"
+        if t.install_command:
+            desc += f"\n\nInstall: {t.install_command}"
+
+        defs.append(
+            {
+                "type": "function",
+                "function": {
+                    "name": func_name,
+                    "description": desc,
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "command": {
+                                "type": "string",
+                                "description": f"実行するコマンド（例: {t.name} --help）",
+                            },
+                        },
+                        "required": ["command"],
+                    },
+                },
+            }
+        )
+    return defs
+
+
+def _build_cli_tool_map(
+    cli_tools: list[DiscoveredCliLibrary],
+) -> dict[str, DiscoveredCliLibrary]:
+    """CLI ツール名（function calling 用）→ DiscoveredCliLibrary のマッピングを構築する"""
+    return {f"cli_{t.name.replace('-', '_')}": t for t in cli_tools}
+
+
+async def _call_cli_tool(
+    executor: CliExecutor,
+    tool: DiscoveredCliLibrary,
+    arguments: dict,
+) -> str:
+    """CLI/Library ツールを実行する（必要ならインストールも行う）"""
+    # インストール
+    if tool.install_command:
+        install_result = await executor.ensure_installed(tool.name, tool.install_command)
+        if "失敗" in install_result or "タイムアウト" in install_result:
+            return install_result
+
+    command = arguments.get("command", "")
+    if not command:
+        return "エラー: command パラメータが必要です"
+
+    return await executor.execute(tool.name, command)
 
 
 # --- LLM 呼び出し ---
@@ -275,15 +335,24 @@ async def run(
     message: str,
     server_names: list[str] | None = None,
     discovered_servers: list[DiscoveredServer] | None = None,
+    cli_libraries: list[DiscoveredCliLibrary] | None = None,
     session_id: str | None = None,
     max_turns: int = 10,
     model: str | None = None,
 ) -> AdapterResult:
     """エージェントを実行する（同期版）"""
+    from crucible_agent.crucible.cli_executor import CliExecutor
+
     servers = discovered_servers or []
+    cli_libs = cli_libraries or []
 
     async with AsyncExitStack() as stack:
         sessions, tools = await _connect_servers(servers, stack)
+
+        # CLI/Library ツールを追加
+        cli_executor = CliExecutor()
+        cli_map = _build_cli_tool_map(cli_libs)
+        tools.extend(_build_cli_tool_defs(cli_libs))
 
         # 過去の会話履歴を復元
         history: list[dict] = []
@@ -335,7 +404,13 @@ async def run(
                     )
 
                     start = time.monotonic()
-                    result_str = await _call_tool(sessions, tool_name, arguments)
+                    # CLI ツールか MCP ツールかで呼び分け
+                    if tool_name in cli_map:
+                        result_str = await _call_cli_tool(
+                            cli_executor, cli_map[tool_name], arguments
+                        )
+                    else:
+                        result_str = await _call_tool(sessions, tool_name, arguments)
                     duration_ms = int((time.monotonic() - start) * 1000)
 
                     messages.append(
@@ -375,6 +450,7 @@ async def run_stream(
     message: str,
     server_names: list[str] | None = None,
     discovered_servers: list[DiscoveredServer] | None = None,
+    cli_libraries: list[DiscoveredCliLibrary] | None = None,
     session_id: str | None = None,
     require_approval: bool = False,
     approval_callback: ApprovalCallback | None = None,
@@ -387,10 +463,18 @@ async def run_stream(
     Args:
         conversation_history: 明示的な会話履歴（指定時は DB からの復元をスキップ）
     """
+    from crucible_agent.crucible.cli_executor import CliExecutor
+
     servers = discovered_servers or []
+    cli_libs = cli_libraries or []
 
     async with AsyncExitStack() as stack:
         sessions, tools = await _connect_servers(servers, stack)
+
+        # CLI/Library ツールを追加
+        cli_executor = CliExecutor()
+        cli_map = _build_cli_tool_map(cli_libs)
+        tools.extend(_build_cli_tool_defs(cli_libs))
 
         # 過去の会話履歴を復元（明示的に渡された場合はそれを使用）
         if conversation_history is not None:
@@ -478,7 +562,13 @@ async def run_stream(
                         )
 
                         start = time.monotonic()
-                        result_str = await _call_tool(sessions, tool_name, arguments)
+                        # CLI ツールか MCP ツールかで呼び分け
+                        if tool_name in cli_map:
+                            result_str = await _call_cli_tool(
+                                cli_executor, cli_map[tool_name], arguments
+                            )
+                        else:
+                            result_str = await _call_tool(sessions, tool_name, arguments)
                         duration_ms = int((time.monotonic() - start) * 1000)
 
                         messages.append(

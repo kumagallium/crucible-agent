@@ -36,7 +36,7 @@ from crucible_agent.api.schemas import (
     ToolsResponse,
 )
 from crucible_agent.config import settings
-from crucible_agent.crucible.discovery import discover_servers
+from crucible_agent.crucible.discovery import discover_all_tools
 from crucible_agent.profiles.repository import (
     create_profile,
     delete_profile,
@@ -391,27 +391,57 @@ async def _restart_litellm() -> None:
 
 @_authed_router.get("/tools", response_model=ToolsResponse)
 async def tools() -> ToolsResponse:
-    """Crucible から検出した利用可能ツール一覧を返す"""
-    servers = await discover_servers()
+    """Crucible から検出した利用可能ツール一覧を返す（3 種すべて）"""
+    all_tools = await discover_all_tools()
 
-    tool_list = [
-        ToolInfo(
-            name=s.name,
-            display_name=s.display_name,
-            description=s.description,
-            url=s.url,
-            transport=s.transport,
-            status=s.status,
+    tool_list: list[ToolInfo] = []
+
+    # MCP サーバー
+    for s in all_tools.servers:
+        tool_list.append(
+            ToolInfo(
+                name=s.name,
+                display_name=s.display_name,
+                description=s.description,
+                tool_type="mcp_server",
+                url=s.url,
+                transport=s.transport,
+                status=s.status,
+            )
         )
-        for s in servers
-    ]
 
+    # CLI/Library
+    for c in all_tools.cli_libraries:
+        tool_list.append(
+            ToolInfo(
+                name=c.name,
+                display_name=c.display_name,
+                description=c.description,
+                tool_type="cli_library",
+                install_command=c.install_command,
+                github_url=c.github_url,
+            )
+        )
+
+    # Skill
+    for sk in all_tools.skills:
+        tool_list.append(
+            ToolInfo(
+                name=sk.name,
+                display_name=sk.display_name,
+                description=sk.description,
+                tool_type="skill",
+                github_url=sk.github_url,
+            )
+        )
+
+    total = len(all_tools.servers) + len(all_tools.cli_libraries) + len(all_tools.skills)
     sources: dict[str, ToolSourceInfo] = {}
     if settings.crucible_api_url:
         sources["crucible"] = ToolSourceInfo(
             url=settings.crucible_api_url,
-            status="connected" if servers else "no_servers",
-            server_count=len(servers),
+            status="connected" if total else "no_servers",
+            server_count=total,
         )
 
     return ToolsResponse(tools=tool_list, sources=sources)

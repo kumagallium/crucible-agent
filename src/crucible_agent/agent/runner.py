@@ -17,7 +17,12 @@ from crucible_agent.agent.adapter import (
 from crucible_agent.agent.adapter import (
     run_stream as adapter_run_stream,
 )
-from crucible_agent.crucible.discovery import DiscoveredServer, discover_servers
+from crucible_agent.crucible.discovery import (
+    DiscoveredCliLibrary,
+    DiscoveredServer,
+    discover_all_tools,
+    discover_servers,
+)
 from crucible_agent.prompts.loader import build_instruction
 
 logger = logging.getLogger(__name__)
@@ -40,6 +45,33 @@ async def _resolve_servers(
     if names:
         logger.info("Crucible から %d 台のサーバーを使用: %s", len(names), names)
     return names, discovered
+
+
+async def _resolve_tools(
+    server_names: list[str] | None,
+) -> tuple[list[str], list[DiscoveredServer], list[DiscoveredCliLibrary]]:
+    """3 種のツールを解決する（MCP サーバー + CLI/Library）
+
+    Returns:
+        (server_names, discovered_servers, cli_libraries)
+    """
+    all_tools = await discover_all_tools()
+
+    servers = all_tools.servers
+    if server_names is not None:
+        servers = [s for s in servers if s.name in server_names]
+
+    names = [s.name for s in servers]
+    if names:
+        logger.info("Crucible から %d 台の MCP サーバーを使用: %s", len(names), names)
+    if all_tools.cli_libraries:
+        logger.info(
+            "Crucible から %d 個の CLI/Library を使用: %s",
+            len(all_tools.cli_libraries),
+            [t.name for t in all_tools.cli_libraries],
+        )
+
+    return names, servers, all_tools.cli_libraries
 
 
 async def _build_instruction_with_contexts(
@@ -88,7 +120,7 @@ async def run_agent(
         instruction = await _build_instruction_with_contexts(
             profile, custom_instructions, context_ids or []
         )
-    server_names, discovered = await _resolve_servers(server_names)
+    server_names, discovered, cli_libs = await _resolve_tools(server_names)
 
     logger.info("Agent run started (session=%s)", session_id)
 
@@ -97,6 +129,7 @@ async def run_agent(
         message=message,
         server_names=server_names,
         discovered_servers=discovered,
+        cli_libraries=cli_libs,
         session_id=session_id,
         model=model,
     )
@@ -129,12 +162,12 @@ async def run_agent_stream(
     instruction = instruction or await _build_instruction_with_contexts(
         profile, custom_instructions, context_ids or [],
     )
-    # 引用コンテキストをユーザーメッセージに直接付与（LLM が確実に参照するため）
+    # 引用コンテキストをユーザーメッセージに直���付与（LLM が確実に参照するため）
     context_prefix = await _build_context_prefix(context_ids or [])
     if context_prefix:
         message = context_prefix + message
 
-    server_names, discovered = await _resolve_servers(server_names)
+    server_names, discovered, cli_libs = await _resolve_tools(server_names)
 
     logger.info("Agent stream started (session=%s, plan_mode=%s)", session_id, require_approval)
 
@@ -143,6 +176,7 @@ async def run_agent_stream(
         message=message,
         server_names=server_names,
         discovered_servers=discovered,
+        cli_libraries=cli_libs,
         session_id=session_id,
         require_approval=require_approval,
         approval_callback=approval_callback,

@@ -182,14 +182,17 @@ class BranchResponse(BaseModel):
 
 
 class ToolInfo(BaseModel):
-    """検出されたツール情報"""
+    """検出さ���たツール情報"""
 
     name: str
     display_name: str
     description: str
-    url: str
-    transport: str
-    status: str
+    tool_type: str = "mcp_server"  # "mcp_server" | "cli_library" | "skill"
+    url: str = ""
+    transport: str = ""
+    status: str = "registered"
+    install_command: str = ""
+    github_url: str = ""
 
 
 class ToolSourceInfo(BaseModel):
