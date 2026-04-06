@@ -993,15 +993,16 @@
     .tool-item .tool-info { flex: 1; min-width: 0; }
     .tool-item .name { font-size: 13px; font-weight: 600; color: var(--foreground); }
     .tool-item .desc { font-size: 11px; color: var(--muted-fg); margin-top: 2px; }
-    .tool-item .transport {
+    .tool-item .tool-type-badge {
       font-size: 10px;
       font-weight: 500;
-      color: var(--primary);
-      background: var(--accent);
       padding: 1px 6px;
       border-radius: var(--radius-full);
       float: right;
     }
+    .tool-type-badge.mcp_server { color: var(--primary); background: var(--accent); }
+    .tool-type-badge.cli_library { color: #b45309; background: #fef3c7; }
+    .tool-type-badge.skill { color: #047857; background: #d1fae5; }
 
     .source-info {
       margin-top: 10px;
@@ -2204,6 +2205,12 @@
         .catch(() => { toolListEl.textContent = '取得失敗'; });
     }
 
+    function toolTypeBadge(toolType) {
+      const labels = { mcp_server: 'MCP', cli_library: 'CLI', skill: 'Skill' };
+      const label = labels[toolType] || toolType;
+      return `<span class="tool-type-badge ${escapeHtml(toolType)}">${escapeHtml(label)}</span>`;
+    }
+
     function renderTools(tools, sources) {
       let html = '';
       for (const t of tools) {
@@ -2211,7 +2218,7 @@
         html += `<div class="tool-item ${on ? '' : 'disabled'}" data-tool="${escapeHtml(t.name)}">
           <button class="tool-toggle ${on ? 'on' : ''}" data-tool="${escapeHtml(t.name)}" title="${on ? 'ON' : 'OFF'}"></button>
           <div class="tool-info">
-            <span class="transport">${escapeHtml(t.transport)}</span>
+            ${toolTypeBadge(t.tool_type || 'mcp_server')}
             <div class="name">${escapeHtml(t.display_name || t.name)}</div>
             ${t.description ? `<div class="desc">${escapeHtml(t.description)}</div>` : ''}
           </div>
