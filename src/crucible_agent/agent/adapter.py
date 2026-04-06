@@ -129,15 +129,49 @@ async def _call_tool(
 # --- CLI/Library ツール ---
 
 
+def _extract_template_vars(run_command: str) -> list[str]:
+    """run_command テンプレートから {変数名} を抽出する"""
+    import re
+
+    return re.findall(r"\{(\w+)\}", run_command)
+
+
 def _build_cli_tool_defs(cli_tools: list[DiscoveredCliLibrary]) -> list[dict]:
-    """CLI/Library ツールを LLM の function calling 定義に変換する"""
+    """CLI/Library ツールを LLM の function calling 定義に変換する
+
+    run_command がある場合: テンプレート変数をパラメータとして公開
+    run_command がない場合: 汎用 command パラメータにフォールバック
+    """
     defs: list[dict] = []
     for t in cli_tools:
         # ツール名: cli_<name>（ハイフンをアンダースコアに変換）
         func_name = f"cli_{t.name.replace('-', '_')}"
         desc = t.description or f"CLI tool: {t.name}"
-        if t.install_command:
-            desc += f"\n\nInstall: {t.install_command}"
+
+        run_cmd = t.cli_execution.run_command
+        if run_cmd:
+            # run_command テンプレートからパラメータを自動生成
+            desc += f"\n\nCommand template: {run_cmd}"
+            if t.cli_execution.output_format:
+                desc += f"\nOutput format: {t.cli_execution.output_format}"
+
+            template_vars = _extract_template_vars(run_cmd)
+            properties: dict = {
+                var: {"type": "string", "description": f"Parameter: {var}"}
+                for var in template_vars
+            }
+            required = template_vars
+        else:
+            # フォールバック: 汎用 command パラメータ
+            if t.install_command:
+                desc += f"\n\nInstall: {t.install_command}"
+            properties = {
+                "command": {
+                    "type": "string",
+                    "description": f"実行するコマンド（例: {t.name} --help）",
+                },
+            }
+            required = ["command"]
 
         defs.append(
             {
@@ -147,13 +181,8 @@ def _build_cli_tool_defs(cli_tools: list[DiscoveredCliLibrary]) -> list[dict]:
                     "description": desc,
                     "parameters": {
                         "type": "object",
-                        "properties": {
-                            "command": {
-                                "type": "string",
-                                "description": f"実行するコマンド（例: {t.name} --help）",
-                            },
-                        },
-                        "required": ["command"],
+                        "properties": properties,
+                        "required": required,
                     },
                 },
             }
@@ -180,6 +209,12 @@ async def _call_cli_tool(
         if "失敗" in install_result or "タイムアウト" in install_result:
             return install_result
 
+    run_cmd = tool.cli_execution.run_command
+    if run_cmd:
+        # run_command テンプレートに引数を埋め込んで実行
+        return await executor.execute_with_template(tool.name, run_cmd, arguments)
+
+    # フォールバック: 汎用 command パラメータ
     command = arguments.get("command", "")
     if not command:
         return "エラー: command パラメータが必要です"
