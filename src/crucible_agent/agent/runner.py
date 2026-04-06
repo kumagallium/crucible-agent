@@ -59,26 +59,33 @@ async def _resolve_tools(
     all_tools = await discover_all_tools()
 
     servers = all_tools.servers
+    cli_libraries = all_tools.cli_libraries
+    skills = all_tools.skills
+
+    # server_names が指定されている場合、3 種すべてをフィルタする
     if server_names is not None:
-        servers = [s for s in servers if s.name in server_names]
+        name_set = set(server_names)
+        servers = [s for s in servers if s.name in name_set]
+        cli_libraries = [c for c in cli_libraries if c.name in name_set]
+        skills = [s for s in skills if s.name in name_set]
 
     names = [s.name for s in servers]
     if names:
         logger.info("Crucible から %d 台の MCP サーバーを使用: %s", len(names), names)
-    if all_tools.cli_libraries:
+    if cli_libraries:
         logger.info(
             "Crucible から %d 個の CLI/Library を使用: %s",
-            len(all_tools.cli_libraries),
-            [t.name for t in all_tools.cli_libraries],
+            len(cli_libraries),
+            [t.name for t in cli_libraries],
         )
-    if all_tools.skills:
+    if skills:
         logger.info(
             "Crucible から %d 個の Skill を検出: %s",
-            len(all_tools.skills),
-            [s.name for s in all_tools.skills],
+            len(skills),
+            [s.name for s in skills],
         )
 
-    return names, servers, all_tools.cli_libraries, all_tools.skills
+    return names, servers, cli_libraries, skills
 
 
 # 1 スキルあたりの最大注入文字数
