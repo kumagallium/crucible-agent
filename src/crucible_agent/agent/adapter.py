@@ -95,7 +95,8 @@ async def _connect_servers(
                 tools.append(tool_def)
                 sessions[tool.name] = session
             logger.info("  %s: %d tools loaded", s.name, len(result.tools))
-        except Exception as e:
+        except BaseException as e:
+            # MCP SDK は内部で TaskGroup を使うため、BaseExceptionGroup が飛ぶ場合がある
             logger.warning("MCP server '%s' connection failed: %s", s.name, e)
 
     return sessions, tools
