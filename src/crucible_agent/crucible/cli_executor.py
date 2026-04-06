@@ -83,6 +83,25 @@ class CliExecutor:
         logger.error(msg)
         return msg
 
+    async def execute_with_template(
+        self, name: str, run_command: str, args: dict[str, str],
+    ) -> str:
+        """run_command テンプレートに引数を埋め込んで実行する
+
+        Args:
+            name: ツール名（ログ用）
+            run_command: コマンドテンプレート（例: "arxiv-mcp search --query {query}"）
+            args: テンプレート変数の値（例: {"query": "quantum computing"}）
+        """
+        # テンプレート変数を安全にエスケープして埋め込み
+        safe_args = {k: shlex.quote(v) for k, v in args.items()}
+        try:
+            full_cmd = run_command.format(**safe_args)
+        except KeyError as e:
+            return f"エラー: run_command のテンプレート変数 {e} が不足しています"
+
+        return await self.execute(name, full_cmd)
+
     async def execute(self, name: str, command: str, arguments: str = "") -> str:
         """CLI コマンドを実行して結果を返す
 

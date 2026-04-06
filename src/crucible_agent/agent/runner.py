@@ -20,6 +20,7 @@ from crucible_agent.agent.adapter import (
 from crucible_agent.crucible.discovery import (
     DiscoveredCliLibrary,
     DiscoveredServer,
+    DiscoveredSkill,
     discover_all_tools,
     discover_servers,
 )
@@ -49,11 +50,11 @@ async def _resolve_servers(
 
 async def _resolve_tools(
     server_names: list[str] | None,
-) -> tuple[list[str], list[DiscoveredServer], list[DiscoveredCliLibrary]]:
-    """3 種のツールを解決する（MCP サーバー + CLI/Library）
+) -> tuple[list[str], list[DiscoveredServer], list[DiscoveredCliLibrary], list[DiscoveredSkill]]:
+    """3 種のツールを解決する
 
     Returns:
-        (server_names, discovered_servers, cli_libraries)
+        (server_names, discovered_servers, cli_libraries, skills)
     """
     all_tools = await discover_all_tools()
 
@@ -70,8 +71,41 @@ async def _resolve_tools(
             len(all_tools.cli_libraries),
             [t.name for t in all_tools.cli_libraries],
         )
+    if all_tools.skills:
+        logger.info(
+            "Crucible から %d 個の Skill を検出: %s",
+            len(all_tools.skills),
+            [s.name for s in all_tools.skills],
+        )
 
-    return names, servers, all_tools.cli_libraries
+    return names, servers, all_tools.cli_libraries, all_tools.skills
+
+
+# 1 スキルあたりの最大注入文字数
+_SKILL_MAX_CHARS = 3000
+# 全スキル合計の最大注入文字数
+_SKILLS_TOTAL_MAX_CHARS = 10000
+
+
+def _build_skill_section(skills: list[DiscoveredSkill]) -> str:
+    """Skill の content をシステムプロンプトに注入するセクションを構築する"""
+    skills_with_content = [s for s in skills if s.content.strip()]
+    if not skills_with_content:
+        return ""
+
+    sections: list[str] = []
+    total = 0
+    for s in skills_with_content:
+        content = s.content[:_SKILL_MAX_CHARS]
+        if total + len(content) > _SKILLS_TOTAL_MAX_CHARS:
+            break
+        sections.append(f"### {s.display_name}\n\n{content}")
+        total += len(content)
+
+    if not sections:
+        return ""
+
+    return "\n\n## Available Skills\n\n" + "\n\n---\n\n".join(sections)
 
 
 async def _build_instruction_with_contexts(
@@ -120,7 +154,12 @@ async def run_agent(
         instruction = await _build_instruction_with_contexts(
             profile, custom_instructions, context_ids or []
         )
-    server_names, discovered, cli_libs = await _resolve_tools(server_names)
+    server_names, discovered, cli_libs, skills = await _resolve_tools(server_names)
+
+    # Skill の content をシステムプロンプトに注入
+    skill_section = _build_skill_section(skills)
+    if skill_section:
+        instruction += skill_section
 
     logger.info("Agent run started (session=%s)", session_id)
 
@@ -162,12 +201,17 @@ async def run_agent_stream(
     instruction = instruction or await _build_instruction_with_contexts(
         profile, custom_instructions, context_ids or [],
     )
-    # 引用コンテキストをユーザーメッセージに直���付与（LLM が確実に参照するため）
+    # 引用コンテキストをユーザーメッセージに直接付与（LLM が確実に参照するため）
     context_prefix = await _build_context_prefix(context_ids or [])
     if context_prefix:
         message = context_prefix + message
 
-    server_names, discovered, cli_libs = await _resolve_tools(server_names)
+    server_names, discovered, cli_libs, skills = await _resolve_tools(server_names)
+
+    # Skill の content をシステムプロンプトに注入
+    skill_section = _build_skill_section(skills)
+    if skill_section:
+        instruction += skill_section
 
     logger.info("Agent stream started (session=%s, plan_mode=%s)", session_id, require_approval)
 

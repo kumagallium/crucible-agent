@@ -32,14 +32,24 @@ class DiscoveredServer:
 
 
 @dataclass
+class CliExecution:
+    """CLI 実行情報（Registry の cli_execution フィールドに対応）"""
+
+    run_command: str = ""  # 実行コマンドテンプレート（例: "arxiv-mcp --query {query}"）
+    output_format: str = ""  # 出力形式（例: "json", "text"）
+    install_command: str = ""  # インストールコマンド（例: "pip install arxiv-mcp"）
+
+
+@dataclass
 class DiscoveredCliLibrary:
     """検出された CLI/Library ツール"""
 
     name: str
     display_name: str
     description: str
-    install_command: str
+    install_command: str  # 後方互換: cli_execution.install_command のフォールバック
     github_url: str
+    cli_execution: CliExecution = field(default_factory=CliExecution)
 
 
 @dataclass
@@ -50,6 +60,7 @@ class DiscoveredSkill:
     display_name: str
     description: str
     github_url: str
+    content: str = ""  # スキル定義のマークダウン本文
 
 
 @dataclass
@@ -123,12 +134,25 @@ def _parse_cli_library(s: dict) -> DiscoveredCliLibrary | None:
     """JSON → DiscoveredCliLibrary（registered のみ）"""
     if s.get("status") not in ("registered", "running"):
         return None
+
+    # cli_execution: Registry の構造化フィールド
+    raw_exec = s.get("cli_execution") or {}
+    cli_exec = CliExecution(
+        run_command=raw_exec.get("run_command", ""),
+        output_format=raw_exec.get("output_format", ""),
+        install_command=raw_exec.get("install_command", ""),
+    )
+
+    # cli_execution.install_command → トップレベルの順でフォールバック
+    install_cmd = cli_exec.install_command or s.get("install_command", "")
+
     return DiscoveredCliLibrary(
         name=s["name"],
         display_name=s.get("display_name", s["name"]),
         description=s.get("description", ""),
-        install_command=s.get("install_command", ""),
+        install_command=install_cmd,
         github_url=s.get("github_url", ""),
+        cli_execution=cli_exec,
     )
 
 
@@ -141,6 +165,7 @@ def _parse_skill(s: dict) -> DiscoveredSkill | None:
         display_name=s.get("display_name", s["name"]),
         description=s.get("description", ""),
         github_url=s.get("github_url", ""),
+        content=s.get("content", ""),
     )
 
 

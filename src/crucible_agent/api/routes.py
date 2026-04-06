@@ -22,6 +22,7 @@ from crucible_agent.api.schemas import (
     AgentRunResponse,
     BranchRequest,
     BranchResponse,
+    CliExecutionInfo,
     EntityResponse,
     GraphResponse,
     HealthResponse,
@@ -420,6 +421,11 @@ async def tools() -> ToolsResponse:
                 tool_type="cli_library",
                 install_command=c.install_command,
                 github_url=c.github_url,
+                cli_execution=CliExecutionInfo(
+                    run_command=c.cli_execution.run_command,
+                    output_format=c.cli_execution.output_format,
+                    install_command=c.cli_execution.install_command,
+                ),
             )
         )
 
@@ -432,6 +438,7 @@ async def tools() -> ToolsResponse:
                 description=sk.description,
                 tool_type="skill",
                 github_url=sk.github_url,
+                content=sk.content,
             )
         )
 

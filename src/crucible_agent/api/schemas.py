@@ -181,8 +181,16 @@ class BranchResponse(BaseModel):
 # --- GET /tools ---
 
 
+class CliExecutionInfo(BaseModel):
+    """CLI 実行情報"""
+
+    run_command: str = ""
+    output_format: str = ""
+    install_command: str = ""
+
+
 class ToolInfo(BaseModel):
-    """検出さ���たツール情報"""
+    """検出されたツール情報"""
 
     name: str
     display_name: str
@@ -193,6 +201,8 @@ class ToolInfo(BaseModel):
     status: str = "registered"
     install_command: str = ""
     github_url: str = ""
+    cli_execution: CliExecutionInfo = Field(default_factory=CliExecutionInfo)
+    content: str = ""  # Skill のマークダウン本文
 
 
 class ToolSourceInfo(BaseModel):
