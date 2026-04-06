@@ -20,7 +20,7 @@ from crucible_agent.provenance.models import (
 logger = logging.getLogger(__name__)
 
 # 非同期エンジン + セッション
-_engine = create_async_engine(settings.database_url, echo=False)
+_engine = create_async_engine(settings.database_url, echo=False, pool_pre_ping=True)
 _session_factory = async_sessionmaker(_engine, expire_on_commit=False)
 
 
