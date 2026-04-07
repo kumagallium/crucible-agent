@@ -382,102 +382,111 @@ async def run(
     servers = discovered_servers or []
     cli_libs = cli_libraries or []
 
-    async with AsyncExitStack() as stack:
-        sessions, tools = await _connect_servers(servers, stack)
+    try:
+        async with AsyncExitStack() as stack:
+            sessions, tools = await _connect_servers(servers, stack)
 
-        # CLI/Library ツールを追加
-        cli_executor = CliExecutor()
-        cli_map = _build_cli_tool_map(cli_libs)
-        tools.extend(_build_cli_tool_defs(cli_libs))
+            # CLI/Library ツールを追加
+            cli_executor = CliExecutor()
+            cli_map = _build_cli_tool_map(cli_libs)
+            tools.extend(_build_cli_tool_defs(cli_libs))
 
-        # 過去の会話履歴を復元
-        history: list[dict] = []
-        if session_id:
-            from crucible_agent.provenance.recorder import get_conversation_history
+            # 過去の会話履歴を復元
+            history: list[dict] = []
+            if session_id:
+                from crucible_agent.provenance.recorder import get_conversation_history
 
-            try:
-                history = await get_conversation_history(session_id)
-            except Exception:
-                logger.warning("会話履歴の読み込みに失敗しました (session=%s)", session_id)
+                try:
+                    history = await get_conversation_history(session_id)
+                except Exception:
+                    logger.warning("会話履歴の読み込みに失敗しました (session=%s)", session_id)
 
-        history = _truncate_history(history, settings.llm_max_context_messages)
-        messages = [
-            {"role": "system", "content": instruction},
-            *history,
-            {"role": "user", "content": message},
-        ]
+            history = _truncate_history(history, settings.llm_max_context_messages)
+            messages = [
+                {"role": "system", "content": instruction},
+                *history,
+                {"role": "user", "content": message},
+            ]
 
-        tool_calls_log: list[dict] = []
-        total_usage = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
+            tool_calls_log: list[dict] = []
+            total_usage = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
 
-        for turn in range(max_turns):
-            resp = await _call_llm(messages, tools if tools else None, model=model)
+            for turn in range(max_turns):
+                resp = await _call_llm(messages, tools if tools else None, model=model)
 
-            usage = resp.get("usage", {})
-            total_usage["input_tokens"] += usage.get("prompt_tokens", 0)
-            total_usage["output_tokens"] += usage.get("completion_tokens", 0)
-            total_usage["total_tokens"] += usage.get("total_tokens", 0)
+                usage = resp.get("usage", {})
+                total_usage["input_tokens"] += usage.get("prompt_tokens", 0)
+                total_usage["output_tokens"] += usage.get("completion_tokens", 0)
+                total_usage["total_tokens"] += usage.get("total_tokens", 0)
 
-            choice = resp["choices"][0]
-            msg = choice["message"]
+                choice = resp["choices"][0]
+                msg = choice["message"]
 
-            if msg.get("tool_calls"):
-                messages.append(msg)
+                if msg.get("tool_calls"):
+                    messages.append(msg)
 
-                for tc in msg["tool_calls"]:
-                    func = tc["function"]
-                    tool_name = func["name"]
-                    arguments = (
-                        json.loads(func["arguments"])
-                        if isinstance(func["arguments"], str)
-                        else func["arguments"]
-                    )
-
-                    logger.info(
-                        "Tool call: %s(%s)",
-                        tool_name,
-                        json.dumps(arguments, ensure_ascii=False)[:200],
-                    )
-
-                    start = time.monotonic()
-                    # CLI ツールか MCP ツールかで呼び分け
-                    if tool_name in cli_map:
-                        result_str = await _call_cli_tool(
-                            cli_executor, cli_map[tool_name], arguments
+                    for tc in msg["tool_calls"]:
+                        func = tc["function"]
+                        tool_name = func["name"]
+                        arguments = (
+                            json.loads(func["arguments"])
+                            if isinstance(func["arguments"], str)
+                            else func["arguments"]
                         )
-                    else:
-                        result_str = await _call_tool(sessions, tool_name, arguments)
-                    duration_ms = int((time.monotonic() - start) * 1000)
 
-                    messages.append(
-                        {
-                            "role": "tool",
-                            "tool_call_id": tc["id"],
-                            "content": result_str,
-                        }
-                    )
+                        logger.info(
+                            "Tool call: %s(%s)",
+                            tool_name,
+                            json.dumps(arguments, ensure_ascii=False)[:200],
+                        )
 
-                    tool_calls_log.append(
-                        {
-                            "tool_name": tool_name,
-                            "input": arguments,
-                            "output": result_str[:1000],
-                            "duration_ms": duration_ms,
-                        }
-                    )
+                        start = time.monotonic()
+                        # CLI ツールか MCP ツールかで呼び分け
+                        if tool_name in cli_map:
+                            result_str = await _call_cli_tool(
+                                cli_executor, cli_map[tool_name], arguments
+                            )
+                        else:
+                            result_str = await _call_tool(sessions, tool_name, arguments)
+                        duration_ms = int((time.monotonic() - start) * 1000)
 
-                continue
+                        messages.append(
+                            {
+                                "role": "tool",
+                                "tool_call_id": tc["id"],
+                                "content": result_str,
+                            }
+                        )
+
+                        tool_calls_log.append(
+                            {
+                                "tool_name": tool_name,
+                                "input": arguments,
+                                "output": result_str[:1000],
+                                "duration_ms": duration_ms,
+                            }
+                        )
+
+                    continue
+
+                return AdapterResult(
+                    message=msg.get("content", ""),
+                    tool_calls=tool_calls_log,
+                    token_usage=total_usage,
+                )
 
             return AdapterResult(
-                message=msg.get("content", ""),
+                message="(最大ループ回数に到達しました)",
                 tool_calls=tool_calls_log,
                 token_usage=total_usage,
             )
-
+    except BaseException as e:
+        # MCP SDK の AsyncExitStack クリーンアップ時に BaseExceptionGroup が飛ぶ場合がある
+        logger.warning("Agent run error (MCP cleanup): %s", e)
         return AdapterResult(
-            message="(最大ループ回数に到達しました)",
-            tool_calls=tool_calls_log,
-            token_usage=total_usage,
+            message=f"MCP サーバーとの接続中にエラーが発生しました: {e}",
+            tool_calls=[],
+            token_usage={},
         )
 
 
@@ -504,42 +513,42 @@ async def run_stream(
     servers = discovered_servers or []
     cli_libs = cli_libraries or []
 
-    async with AsyncExitStack() as stack:
-        sessions, tools = await _connect_servers(servers, stack)
+    try:
+        async with AsyncExitStack() as stack:
+            sessions, tools = await _connect_servers(servers, stack)
 
-        # CLI/Library ツールを追加
-        cli_executor = CliExecutor()
-        cli_map = _build_cli_tool_map(cli_libs)
-        tools.extend(_build_cli_tool_defs(cli_libs))
+            # CLI/Library ツールを追加
+            cli_executor = CliExecutor()
+            cli_map = _build_cli_tool_map(cli_libs)
+            tools.extend(_build_cli_tool_defs(cli_libs))
 
-        # 過去の会話履歴を復元（明示的に渡された場合はそれを使用）
-        if conversation_history is not None:
-            history = conversation_history
-        else:
-            history = []
-            if session_id:
-                from crucible_agent.provenance.recorder import (
-                    get_conversation_history,
-                )
-
-                try:
-                    history = await get_conversation_history(session_id)
-                except Exception:
-                    logger.warning(
-                        "会話履歴の読み込みに失敗しました (session=%s)",
-                        session_id,
+            # 過去の会話履歴を復元（明示的に渡された場合はそれを使用）
+            if conversation_history is not None:
+                history = conversation_history
+            else:
+                history = []
+                if session_id:
+                    from crucible_agent.provenance.recorder import (
+                        get_conversation_history,
                     )
 
-        history = _truncate_history(history, settings.llm_max_context_messages)
-        messages = [
-            {"role": "system", "content": instruction},
-            *history,
-            {"role": "user", "content": message},
-        ]
+                    try:
+                        history = await get_conversation_history(session_id)
+                    except Exception:
+                        logger.warning(
+                            "会話履歴の読み込みに失敗しました (session=%s)",
+                            session_id,
+                        )
 
-        total_usage = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
+            history = _truncate_history(history, settings.llm_max_context_messages)
+            messages = [
+                {"role": "system", "content": instruction},
+                *history,
+                {"role": "user", "content": message},
+            ]
 
-        try:
+            total_usage = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
+
             for turn in range(max_turns):
                 resp = await _call_llm(messages, tools if tools else None, model=model)
 
@@ -590,38 +599,38 @@ async def run_stream(
                                 )
                                 continue
 
-                        yield StreamEvent(
-                            type="tool_start",
-                            tool_call_id=tool_call_id,
-                            tool_name=tool_name,
-                            input=arguments,
-                        )
+                    yield StreamEvent(
+                        type="tool_start",
+                        tool_call_id=tool_call_id,
+                        tool_name=tool_name,
+                        input=arguments,
+                    )
 
-                        start = time.monotonic()
-                        # CLI ツールか MCP ツールかで呼び分け
-                        if tool_name in cli_map:
-                            result_str = await _call_cli_tool(
-                                cli_executor, cli_map[tool_name], arguments
-                            )
-                        else:
-                            result_str = await _call_tool(sessions, tool_name, arguments)
-                        duration_ms = int((time.monotonic() - start) * 1000)
-
-                        messages.append(
-                            {
-                                "role": "tool",
-                                "tool_call_id": tool_call_id,
-                                "content": result_str,
-                            }
+                    start = time.monotonic()
+                    # CLI ツールか MCP ツールかで呼び分け
+                    if tool_name in cli_map:
+                        result_str = await _call_cli_tool(
+                            cli_executor, cli_map[tool_name], arguments
                         )
+                    else:
+                        result_str = await _call_tool(sessions, tool_name, arguments)
+                    duration_ms = int((time.monotonic() - start) * 1000)
 
-                        yield StreamEvent(
-                            type="tool_end",
-                            tool_call_id=tool_call_id,
-                            tool_name=tool_name,
-                            output={"result": result_str[:500]},
-                            duration_ms=duration_ms,
-                        )
+                    messages.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": tool_call_id,
+                            "content": result_str,
+                        }
+                    )
+
+                    yield StreamEvent(
+                        type="tool_end",
+                        tool_call_id=tool_call_id,
+                        tool_name=tool_name,
+                        output={"result": result_str[:500]},
+                        duration_ms=duration_ms,
+                    )
 
                     continue
 
@@ -634,27 +643,28 @@ async def run_stream(
                 return
 
             yield StreamEvent(type="done", token_usage=total_usage)
-        except LLMContextOverflowError as e:
-            logger.warning("コンテキスト長超過: %s", e)
-            yield StreamEvent(
-                type="error",
-                content="会話が長くなりすぎました。新しいセッションを開始してください。",
-            )
-        except LLMRateLimitError as e:
-            logger.warning("レートリミット: %s", e)
-            yield StreamEvent(
-                type="error",
-                content="API のリクエスト制限に達しました。しばらく待ってから再試行してください。",
-            )
-        except LLMTimeoutError as e:
-            logger.warning("LLM タイムアウト: %s", e)
-            yield StreamEvent(
-                type="error",
-                content="AI の応答がタイムアウトしました。もう一度お試しください。",
-            )
-        except LLMError as e:
-            logger.exception("LLM エラー: %s", e)
-            yield StreamEvent(type="error", content=str(e))
-        except Exception as e:
-            logger.exception("Agent stream error")
-            yield StreamEvent(type="error", content=f"予期しないエラーが発生しました: {e}")
+    except LLMContextOverflowError as e:
+        logger.warning("コンテキスト長超過: %s", e)
+        yield StreamEvent(
+            type="error",
+            content="会話が長くなりすぎました。新しいセッションを開始してください。",
+        )
+    except LLMRateLimitError as e:
+        logger.warning("レートリミット: %s", e)
+        yield StreamEvent(
+            type="error",
+            content="API のリクエスト制限に達しました。しばらく待ってから再試行してください。",
+        )
+    except LLMTimeoutError as e:
+        logger.warning("LLM タイムアウト: %s", e)
+        yield StreamEvent(
+            type="error",
+            content="AI の応答がタイムアウトしました。もう一度お試しください。",
+        )
+    except LLMError as e:
+        logger.exception("LLM エラー: %s", e)
+        yield StreamEvent(type="error", content=str(e))
+    except BaseException as e:
+        # MCP SDK の AsyncExitStack クリーンアップ時に BaseExceptionGroup が飛ぶ場合がある
+        logger.warning("Agent stream error (MCP cleanup): %s", e)
+        yield StreamEvent(type="error", content=f"予期しないエラーが発生しました: {e}")
