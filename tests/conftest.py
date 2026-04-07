@@ -28,6 +28,7 @@ class _TestSettings(BaseSettings):
     llm_model: str = "test-model"
     crucible_api_url: str = "http://localhost:8080"
     crucible_api_key: str = "test-key"
+    crucible_mcp_direct: bool = False
     database_url: str = "sqlite+aiosqlite:///test.db"
     agent_port: int = 9999
     log_level: str = "debug"

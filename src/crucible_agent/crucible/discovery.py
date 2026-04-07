@@ -107,13 +107,18 @@ def _parse_mcp_server(s: dict, crucible_host: str) -> DiscoveredServer | None:
         return None
 
     endpoint_path = s.get("endpoint_path", "/sse")
+    static_ip = s.get("static_ip")
     port = s.get("port", 8000)
 
     # トランスポート判定: /mcp → streamable-http, /sse → sse
     transport = "streamable-http" if endpoint_path == "/mcp" else "sse"
 
-    # Registry ホスト + 公開ポートでアクセス（Agent と MCP が別サーバーでも到達可能）
-    url = f"http://{crucible_host}:{port}{endpoint_path}"
+    if settings.crucible_mcp_direct and static_ip:
+        # 同一ホスト: Docker 内部 IP + 内部ポート (8000) で直接接続
+        url = f"http://{static_ip}:8000{endpoint_path}"
+    else:
+        # デフォルト: Registry ホスト + 公開ポート（クロスホストでも到達可能）
+        url = f"http://{crucible_host}:{port}{endpoint_path}"
 
     return DiscoveredServer(
         name=s["name"],

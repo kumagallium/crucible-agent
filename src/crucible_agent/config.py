@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     # --- Crucible ---
     crucible_api_url: str = "http://crucible-api:8080"
     crucible_api_key: str = ""
+    crucible_mcp_direct: bool = False  # True: Docker 内部 IP で MCP 接続（同一ホスト時）
 
     # --- Database ---
     database_url: str = "postgresql+asyncpg://agent:agent@postgres:5432/crucible_agent"
