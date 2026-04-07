@@ -14,6 +14,19 @@ AI agent runtime that connects any frontend to MCP servers via LLM — domain be
 - **Plan Mode** — Require user approval before each tool execution for safety-critical workflows.
 - **Production-Ready Deployment** — One-command server setup with SSH hardening, firewall, fail2ban, and Docker isolation.
 
+### Screenshots
+
+<table>
+  <tr>
+    <td><b>Chat UI (Desktop)</b></td>
+    <td><b>Chat UI (Mobile)</b></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/chat-ui.png" alt="Chat UI Desktop" width="500" /></td>
+    <td><img src="docs/screenshots/chat-ui-mobile.png" alt="Chat UI Mobile" width="200" /></td>
+  </tr>
+</table>
+
 ## Architecture
 
 ```mermaid
