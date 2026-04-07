@@ -2,7 +2,7 @@
 name = "crucible-agent"
 version = "0.1.0"
 description = "AI agent runtime that connects any frontend to MCP servers via LLM — domain behavior is driven by swappable prompt profiles"
-license = { text = "Apache-2.0" }
+license = { text = "MIT" }
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115",
